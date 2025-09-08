@@ -180,25 +180,33 @@ def get_trx_price():
         logger.error(f"Error fetching TRX price: {e}")
         return None
 
+# Live TRX → USD rate আনবে
+def get_trx_price_usd():
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=tron&vs_currencies=usd"
+        response = requests.get(url).json()
+        return float(response["tron"]["usd"])
+    except:
+        return 0.11  # fallback যদি API না চলে
+
 def check_tron_payment(address, amount=SUBSCRIPTION_PRICE):
     try:
         client = Tron(provider=HTTPProvider(TRON_NODE))
         
-        # Check USDT balance
-        contract = client.get_contract(TRON_USDT_CONTRACT)
-        usdt_balance = contract.functions.balanceOf(address) / 1000000
-        
-        # Check TRX balance
+        # ইউজারের TRX ব্যালেন্স
         trx_balance = client.get_account_balance(address)
         
-        # Allow 0.5% variance
+        # TRX → USD কনভার্ট
+        trx_price = get_trx_price_usd()
+        trx_in_usd = trx_balance * trx_price
+        
+        logger.info(f"[CHECK] Balance={trx_balance} TRX ≈ ${trx_in_usd:.2f}")
+        
+        # 0.5% margin
         min_amount = amount * 0.995
         max_amount = amount * 1.005
         
-        # Return True if either USDT or TRX meets the required amount
-        if min_amount <= usdt_balance <= max_amount:
-            return True
-        elif min_amount <= trx_balance <= max_amount:
+        if min_amount <= trx_in_usd <= max_amount:
             return True
         else:
             return False
