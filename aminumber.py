@@ -25,9 +25,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-BOT_TOKEN = "YOUR_BOT_TOKEN"
+BOT_TOKEN = "7604987358:AAGtEVsvV6wrE1yRPf_4l9s-WpFE9M0EWH8"
 ADMIN_IDS = [7903239321]  # Updated admin ID
-TRON_NODE = "https://api.trongrid.io"
+TRON_NODE = "22239e39-909a-4633-b56c-a807aacd7792"
 TRON_USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"  # USDT TRC20 contract
 MAX_NUMBERS_PER_REQUEST = 500
 COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price?ids=tron&vs_currencies=usd"
