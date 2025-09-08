@@ -205,4 +205,4 @@ def send_trx(private_key, to_address, amount):
     return "tx_hash"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5050)
