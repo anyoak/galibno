@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "7604987358:AAGtEVsvV6wrE1yRPf_4l9s-WpFE9M0EWH8"
 ADMIN_IDS = [7903239321]  # Admin ID as integer
 TRON_NODE = "https://api.trongrid.io"
+TRON_HEADERS = {
+    "TRON-PRO-API-KEY": "22239e39-909a-4633-b56c-a807aacd7792"
+}
 TRON_USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"  # USDT TRC20 contract
 MAX_NUMBERS_PER_REQUEST = 500
 DAILY_LIMIT = 2000
@@ -191,7 +194,7 @@ def get_trx_price_usd():
 
 def check_tron_payment(address, amount=SUBSCRIPTION_PRICE):
     try:
-        client = Tron(provider=HTTPProvider(TRON_NODE))
+        client = Tron(provider=HTTPProvider(TRON_NODE, headers=TRON_HEADERS))
         
         # ইউজারের TRX ব্যালেন্স
         trx_balance = client.get_account_balance(address)
@@ -216,7 +219,7 @@ def check_tron_payment(address, amount=SUBSCRIPTION_PRICE):
 
 def get_total_balance(address):
     try:
-        client = Tron(provider=HTTPProvider(TRON_NODE))
+        client = Tron(provider=HTTPProvider(TRON_NODE, headers=TRON_HEADERS))
         
         # Get TRX balance
         trx_balance = client.get_account_balance(address)
@@ -232,7 +235,7 @@ def get_total_balance(address):
 
 def send_trx(from_private_key, to_address, amount):
     try:
-        client = Tron(provider=HTTPProvider(TRON_NODE))
+        client = Tron(provider=HTTPProvider(TRON_NODE, headers=TRON_HEADERS))
         priv_key = PrivateKey(bytes.fromhex(from_private_key))
         
         txn = (
@@ -248,7 +251,7 @@ def send_trx(from_private_key, to_address, amount):
 
 def send_usdt(from_private_key, to_address, amount):
     try:
-        client = Tron(provider=HTTPProvider(TRON_NODE))
+        client = Tron(provider=HTTPProvider(TRON_NODE, headers=TRON_HEADERS))
         priv_key = PrivateKey(bytes.fromhex(from_private_key))
         contract = client.get_contract(TRON_USDT_CONTRACT)
         
