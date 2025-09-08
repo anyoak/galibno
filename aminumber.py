@@ -49,7 +49,7 @@ def init_db():
         subscription_end DATETIME,
         daily_checks INTEGER DEFAULT 0,
         total_checks INTEGER DEFAULT 0,
-        max_checks INTEGER DEFAULT 14000,
+        max_checks INTEGER DEFAULT 10010,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     ''')
