@@ -188,11 +188,20 @@ def check_tron_payment(address, amount=SUBSCRIPTION_PRICE):
         contract = client.get_contract(TRON_USDT_CONTRACT)
         usdt_balance = contract.functions.balanceOf(address) / 1000000
         
+        # Check TRX balance
+        trx_balance = client.get_account_balance(address)
+        
         # Allow 0.5% variance
         min_amount = amount * 0.995
         max_amount = amount * 1.005
         
-        return min_amount <= usdt_balance <= max_amount
+        # Return True if either USDT or TRX meets the required amount
+        if min_amount <= usdt_balance <= max_amount:
+            return True
+        elif min_amount <= trx_balance <= max_amount:
+            return True
+        else:
+            return False
     except Exception as e:
         logger.error(f"Error checking TRON payment: {e}")
         return False
