@@ -26,11 +26,10 @@ logger = logging.getLogger(__name__)
 
 # Bot configuration
 BOT_TOKEN = "7604987358:AAGtEVsvV6wrE1yRPf_4l9s-WpFE9M0EWH8"
-ADMIN_IDS = [7903239321]  # Updated admin ID
+ADMIN_IDS = [7903239321]  # Admin ID as integer
 TRON_NODE = "22239e39-909a-4633-b56c-a807aacd7792"
 TRON_USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"  # USDT TRC20 contract
 MAX_NUMBERS_PER_REQUEST = 500
-COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price?ids=tron&vs_currencies=usd"
 
 # Database setup
 def init_db():
@@ -154,10 +153,9 @@ def generate_tron_address():
     private_key = client.generate_address()
     return private_key['base58check_address'], private_key['private_key']
 
-def get_trx_to_usd_rate():
+def get_trx_price():
     try:
-        response = requests.get(COINGECKO_API)
-        response.raise_for_status()
+        response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=tron&vs_currencies=usd")
         data = response.json()
         return data['tron']['usd']
     except Exception as e:
@@ -167,15 +165,17 @@ def get_trx_to_usd_rate():
 def check_tron_payment(address, amount=5):
     try:
         client = Tron(provider=HTTPProvider(TRON_NODE))
+        balance = client.get_account_balance(address)
         usdt_balance = 0
         
         # Check USDT balance
         contract = client.get_contract(TRON_USDT_CONTRACT)
         usdt_balance = contract.functions.balanceOf(address) / 1000000
         
-        # Allow 0.5% tolerance
+        # Allow 0.5% variance
         min_amount = amount * 0.995
         max_amount = amount * 1.005
+        
         return min_amount <= usdt_balance <= max_amount
     except Exception as e:
         logger.error(f"Error checking TRON payment: {e}")
@@ -287,23 +287,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = get_user_data(user_id)
     
-    # Get TRX to USD rate
-    trx_rate = get_trx_to_usd_rate()
-    if trx_rate:
-        trx_amount = 5 / trx_rate
-        trx_amount_min = 5 / (trx_rate * 1.005)  # 0.5% lower
-        trx_amount_max = 5 / (trx_rate * 0.995)  # 0.5% higher
-        payment_text = f"Payment required: 5 USD (~{trx_amount:.2f} TRX, range: {trx_amount_min:.2f} - {trx_amount_max:.2f} TRX)"
-    else:
-        payment_text = "Payment required: 5 USD (TRX amount unavailable, please check current rate)"
-    
     if user:
         subscription_end = datetime.strptime(user[2], '%Y-%m-%d %H:%M:%S') if user[2] else None
         if subscription_end and subscription_end > datetime.now():
             remaining_days = (subscription_end - datetime.now()).days
             await update.message.reply_text(
                 f"Your subscription is active. {remaining_days} days remaining.\n\n"
-                f"You can check {user[3]}/1430 numbers today.\n"
+                f"You can check {1430 - user[3]}/1430 numbers today.\n"
                 f"Total checks done: {user[4]}/{user[5]}"
             )
         else:
@@ -319,18 +309,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.commit()
             conn.close()
             
+            # Get TRX price
+            trx_price = get_trx_price()
+            trx_amount = 5 / trx_price if trx_price else "N/A"
+            
             keyboard = [
                 [InlineKeyboardButton("Check Payment", callback_data=f"check_payment_{user_id}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await update.message.reply_text(
+            message = (
                 f"To use the service, please pay 5 USD (USDT-TRC20) to the following address:\n\n"
                 f"`{tron_address}`\n\n"
-                f"{payment_text}\n\n"
+            )
+            
+            if trx_price:
+                message += f"Approximately {trx_amount:.2f} TRX (based on current price)\n\n"
+            
+            message += (
+                f"We accept a 0.5% variance (4.975 - 5.025 USDT)\n\n"
                 f"Click 'Check Payment' after completing the payment.\n"
-                f"You will get access for 7 days after payment verification.\n"
-                f"Note: Payment within 0.5% tolerance will be accepted.",
+                f"You will get access for 7 days after payment verification."
+            )
+            
+            await update.message.reply_text(
+                message,
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
@@ -344,18 +347,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
         conn.close()
         
+        # Get TRX price
+        trx_price = get_trx_price()
+        trx_amount = 5 / trx_price if trx_price else "N/A"
+        
         keyboard = [
             [InlineKeyboardButton("Check Payment", callback_data=f"check_payment_{user_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(
+        message = (
             f"To use the service, please pay 5 USD (USDT-TRC20) to the following address:\n\n"
             f"`{tron_address}`\n\n"
-            f"{payment_text}\n\n"
+        )
+        
+        if trx_price:
+            message += f"Approximately {trx_amount:.2f} TRX (based on current price)\n\n"
+        
+        message += (
+            f"We accept a 0.5% variance (4.975 - 5.025 USDT)\n\n"
             f"Click 'Check Payment' after completing the payment.\n"
-            f"You will get access for 7 days after payment verification.\n"
-            f"Note: Payment within 0.5% tolerance will be accepted.",
+            f"You will get access for 7 days after payment verification."
+        )
+        
+        await update.message.reply_text(
+            message,
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
