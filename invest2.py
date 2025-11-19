@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = "8441847556:AAGO_XbbN_eJJrL944JCO6uzHW7TDjS5VEQ"
 ADMIN_ID = 6083895678
 MIN_WITHDRAW = 100
 MIN_DEPOSIT = 50
