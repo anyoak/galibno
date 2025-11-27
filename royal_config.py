@@ -1,5 +1,3 @@
-# config.py
-
 BOT_TOKEN = "8461039358:AAHAP7WWhDvvqsOnuidSAj4X6l9zXw5G4zM"
 
 # Admin Chat ID (যেখানে শুধু ফুল নাম্বার + URL যাবে)
