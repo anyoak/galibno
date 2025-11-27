@@ -600,10 +600,10 @@ def extract_sms():
 
                 # NEW MESSAGE STYLE - Using CLI as service
                 formatted = (
-                    f"📳 New SMS Captured! {source_name} of {country_flag}\n\n"
+                    f"📳 New SMS Captured! {cli} of {country_flag}\n\n"
                     f"└ ⏰ TIME: {date}\n"
                     f"└ {country_flag} {country_name}\n"
-                    f"└ 🌐 Service: {cli}\n"
+                    f"└ 🌐 Source: {cli}\n"
                     f"└ 📞 Number: `{masked_number}`\n"
                     f"────────────\n"
                     f"└ 🔐 OTP: `{otp_code}`\n"
