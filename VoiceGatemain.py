@@ -15,8 +15,8 @@ from phonenumbers import geocoder, region_code_for_number
 import pycountry
 
 # ==================== CONFIGURATION ====================
-BOT_TOKEN = "8031189126:AAFT4YpCT1mGk3LB_a6FHXut49InwAWuTAU"
-CHAT_ID = "-1002617899939"
+BOT_TOKEN = "8354581009:AAH28Cn3VQAdmQYb8a9q7WNEIly7x7s8moM"
+CHAT_ID = "-1002631004312"
 BASE_URL = "http://51.89.7.175/sms/client/"
 LOGIN_URL = "http://51.89.7.175/sms/SignIn"
 SMS_URL = "http://51.89.7.175/sms/client/Reports"
@@ -291,8 +291,8 @@ def send_to_telegram(text: str):
     keyboard = {
         "inline_keyboard": [
             [
-                {"text": "📢 Main Channel", "url": "https://t.me/atik_method_zone"},
-                {"text": "📋 Get Number", "url": "http://t.me/Atik_number_bot"}
+                {"text": "📢 Main Channel", "url": "https://t.me/mailtwist"},
+                {"text": "📋 Get Number", "url": "http://t.me/NumberTwistBot"}
             ]
         ]
     }
