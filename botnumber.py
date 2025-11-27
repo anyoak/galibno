@@ -20,7 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-API_TOKEN = "8417470449:AAFscMp5KvHtBfCKWQFVMiPPLcN4JYchMoI"
+API_TOKEN = "8490533685:AAHsZW-Do8ioSQHlU4SCDh3RlvMdBPpz2To"
 ADMIN_IDS = [6577308099, 5878787791]
 
 # Default channel values (used only as fallback / initial database values)
