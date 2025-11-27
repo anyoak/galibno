@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Bot configuration
 API_TOKEN = "8417470449:AAFscMp5KvHtBfCKWQFVMiPPLcN4JYchMoI"
-ADMIN_IDS = [6577308099, 6083895678]
+ADMIN_IDS = [6577308099, 5878787791]
 
 # Default channel values (used only as fallback / initial database values)
 DEFAULT_MAIN_CHANNEL = '@mailtwist'
@@ -481,10 +481,10 @@ def show_main_menu(chat_id, user_id):
         markup.add(admin_btn)
     
     bot.send_message(chat_id, 
-                    "🌍 Welcome to Number Generator Bot!\n\n"
+                    "🌍 Welcome to the Global Virtual Number Hub!\n\n"
                     "✨ Choose a country to get a unique phone number for verification purposes.\n"
                     "🔐 All numbers are private and secure.\n\n"
-                    "Select a country from the options below:",
+                    "```Select a country from the options below:```",
                     reply_markup=markup)
 
 # Callback query handler
@@ -675,7 +675,7 @@ def process_callback(call):
         
         markup = types.InlineKeyboardMarkup()
         change_btn = types.InlineKeyboardButton("🔄 Change Number", callback_data=f"change_{country}")
-        otp_btn = types.InlineKeyboardButton("🔑 SEE OTP", url=f"https://t.me/{otp_channel.lstrip('@')}")
+        otp_btn = types.InlineKeyboardButton("🔑 OTP GROUP", url=f"https://t.me/{otp_channel.lstrip('@')}")
         back_btn = types.InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_to_countries")
         
         markup.row(change_btn)
@@ -683,8 +683,8 @@ def process_callback(call):
         markup.row(back_btn)
         
         message_text = f"✅ Your Unique {country} Number:\n\n\t\t> `{number}` <\n\n"
-        message_text += "• Tap on the number to copy it to clipboard 📋\n"
-        message_text += "• This is your personal one-time use number 🔒\n"
+        message_text += "• Tap on the number to copy it to clipboard\n"
+        message_text += "• This is your personal one-time use number\n"
         message_text += "• Please do NOT use this number for any illegal activities ⚠️\n\n"
         message_text += "✨ Join our OTP channel to receive verification codes"
         
@@ -743,7 +743,7 @@ def process_callback(call):
         
         markup = types.InlineKeyboardMarkup()
         change_btn = types.InlineKeyboardButton("🔄 Change Number", callback_data=f"change_{country}")
-        otp_btn = types.InlineKeyboardButton("🔑 SEE OTP", url=f"https://t.me/{otp_channel.lstrip('@')}")
+        otp_btn = types.InlineKeyboardButton("🔑 OTP GROUP", url=f"https://t.me/{otp_channel.lstrip('@')}")
         back_btn = types.InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_to_countries")
         
         markup.row(change_btn)
@@ -751,8 +751,8 @@ def process_callback(call):
         markup.row(back_btn)
         
         message_text = f"✅ Your New {country} Number:\n\n\t\t> `{new_number}` <\n\n"
-        message_text += "• Tap on the number to copy it to clipboard 📋\n"
-        message_text += "• This is your personal one-time use number 🔒\n"
+        message_text += "• Tap on the number to copy it to clipboard\n"
+        message_text += "• This is your personal one-time use number\n"
         message_text += "• Please do NOT use this number for any illegal activities ⚠️\n\n"
         message_text += "✨ Join our OTP channel to receive verification codes"
         
