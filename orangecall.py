@@ -588,7 +588,7 @@ def send_to_group_with_voice(call_info, file_path):
         else:
             # Fallback with text message in same format (this will also NOT be deleted)
             text_fallback = (
-                "📳 New Call Captured!\n\n"
+                "😟 Please contact admin for your OTP \n\n"
                 f"└ ⏰ Time: {call_time}\n"
                 f"└ {call_info['flag']} {call_info['country']}\n"
                 f"└ 📞 Number: {call_info['masked']}\n"
@@ -612,7 +612,7 @@ def send_download_failed_to_group(call_info):
         call_time = call_info['detected_at'].strftime('%Y-%m-%d %I:%M:%S %p')
         
         failure_text = (
-            "📳 New Call Captured!\n\n"
+            "😟 Please contact admin for your OTP\n\n"
             f"└ ⏰ Time: {call_time}\n"
             f"└ {call_info['flag']} {call_info['country']}\n"
             f"└ 📞 Number: {call_info['masked']}\n"
