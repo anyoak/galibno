@@ -20,12 +20,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-API_TOKEN = "8417470449:AAFscMp5KvHtBfCKWQFVMiPPLcN4JYchMoI"
+API_TOKEN = "8490533685:AAHsZW-Do8ioSQHlU4SCDh3RlvMdBPpz2To"
 ADMIN_IDS = [6577308099, 5878787791]
 
 # Default channel values (used only as fallback / initial database values)
 DEFAULT_MAIN_CHANNEL = '@mailtwist'
-DEFAULT_BACKUP_CHANNEL = '-1001817856867'
+DEFAULT_BACKUP_CHANNEL = '-1002110340097'
 DEFAULT_BACKUP_CHANNEL_LINK = 'https://t.me/+FFG2MEKtQsxkMTQ9'
 DEFAULT_OTP_CHANNEL = '@OrangeTrack'
 
@@ -393,7 +393,7 @@ def handle_commands(message):
             return
             
         # For regular users when bot is disabled
-        bot.reply_to(message, "❌ Admin has disabled the bot. Please try again after some time.")
+        bot.reply_to(message, "⚠️ Service Unavailable!\nThe bot has been temporarily disabled by the admin for maintenance purposes.Please try again after a while.")
         return
     
     if message.text == '/push':
