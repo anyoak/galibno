@@ -17,9 +17,9 @@ import pycountry
 # ==================== CONFIGURATION ====================
 BOT_TOKEN = "8354581009:AAH28Cn3VQAdmQYb8a9q7WNEIly7x7s8moM"
 CHAT_ID = "-1002631004312"
-BASE_URL = "http://51.89.7.175/sms/client/"
+BASE_URL = "http://51.89.7.175/sms/subclient/"
 LOGIN_URL = "http://51.89.7.175/sms/SignIn"
-SMS_URL = "http://51.89.7.175/sms/client/Reports"
+SMS_URL = "http://51.89.7.175/sms/subclient/Reports"
 REFRESH_INTERVAL = 5
 MAX_MESSAGES_STORE = 2000
 SCROLL_ATTEMPTS = 3
