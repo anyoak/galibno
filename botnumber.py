@@ -328,30 +328,43 @@ def check_membership(user_id, force_check=False):
     max_retries = 3
     retry_delay = 1  # seconds
     
+    main_channel, backup_channel, _, _ = get_channel_settings()
+    
+    main_ok = False
+    backup_ok = False
+    
+    # Check main channel
     for attempt in range(max_retries):
         try:
-            main_channel, backup_channel, backup_link, otp_channel = get_channel_settings()
-            # Check main channel membership
             main_member = bot.get_chat_member(main_channel, user_id)
-            if main_member.status not in ['member', 'administrator', 'creator']:
-                result = (False, "public")
-                break
-                
-            # Check backup channel membership
-            backup_member = bot.get_chat_member(backup_channel, user_id)
-            if backup_member.status not in ['member', 'administrator', 'creator']:
-                result = (False, "private")
-                break
-                
-            result = (True, "both")
+            if main_member.status in ['member', 'administrator', 'creator']:
+                main_ok = True
             break
-            
         except Exception as e:
-            logger.error(f"Membership check failed (attempt {attempt + 1}/{max_retries}): {e}")
+            logger.error(f"Main channel check failed (attempt {attempt + 1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
-            else:
-                result = (False, "error")
+    
+    if not main_ok:
+        result = (False, "public")
+    
+    else:
+        # Check backup channel
+        for attempt in range(max_retries):
+            try:
+                backup_member = bot.get_chat_member(backup_channel, user_id)
+                if backup_member.status in ['member', 'administrator', 'creator']:
+                    backup_ok = True
+                break
+            except Exception as e:
+                logger.error(f"Backup channel check failed (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+        
+        if not backup_ok:
+            result = (False, "private")
+        else:
+            result = (True, "both")
     
     # Update cache
     if not hasattr(check_membership, 'cache'):
@@ -512,6 +525,11 @@ def send_welcome(message):
         join_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         db.execute("INSERT INTO users (user_id, username, first_name, last_name, join_date) VALUES (?, ?, ?, ?, ?)",
                    (user_id, username, first_name, last_name, join_date))
+    
+    # Bypass membership check for admins
+    if is_admin(user_id):
+        show_main_menu(message.chat.id, user_id)
+        return
     
     is_member, channel_type = check_membership(user_id, force_check=True)  # Force fresh check for new users
     main_channel, backup_channel, backup_link, otp_channel = get_channel_settings()
@@ -728,7 +746,7 @@ def process_callback(call):
         country = call.data.split("_", 1)[1]
         
         is_member, channel_type = check_membership(user_id)
-        if not is_member:
+        if not is_member and not is_admin(user_id):
             if channel_type == "public":
                 error_msg = "❌ Please join our main channel first!"
             else:
@@ -792,7 +810,7 @@ def process_callback(call):
         # This ensures users see the popup before any processing happens
         
         is_member, channel_type = check_membership(user_id)
-        if not is_member:
+        if not is_member and not is_admin(user_id):
             if channel_type == "public":
                 error_msg = "❌ Please join our main channel first!"
             else:
