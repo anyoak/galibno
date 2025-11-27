@@ -471,7 +471,9 @@ def handle_commands(message):
             return
             
         # For regular users when bot is disabled
-        bot.reply_to(message, "❌ Admin has disabled the bot. Please try again after some time.")
+        bot.reply_to(message, "```⚠️ Service Unavailable!
+The bot has been temporarily disabled by the admin for maintenance purposes.
+Please try again after a while.```")
         return
     
     if message.text == '/push':
@@ -1189,7 +1191,7 @@ def broadcast_message(message):
     
     for user in users:
         try:
-            bot.send_message(user[0], f"📢 Announcement from Admin:\n\n{text}")
+            bot.send_message(user[0], f"📜\n\n{text}")
             success += 1
         except:
             failed += 1
