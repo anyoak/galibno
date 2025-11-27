@@ -471,9 +471,7 @@ def handle_commands(message):
             return
             
         # For regular users when bot is disabled
-        bot.reply_to(message, "```⚠️ Service Unavailable!
-The bot has been temporarily disabled by the admin for maintenance purposes.
-Please try again after a while.```")
+        bot.reply_to(message, "```⚠️ Service Unavailable!/nThe bot has been temporarily disabled by the admin for maintenance purposes.Please try again after a while.```")
         return
     
     if message.text == '/push':
