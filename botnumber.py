@@ -25,7 +25,7 @@ ADMIN_IDS = [6577308099, 5878787791]
 
 # Default channel values (used only as fallback / initial database values)
 DEFAULT_MAIN_CHANNEL = '@mailtwist'
-DEFAULT_BACKUP_CHANNEL = '-1001817856867'
+DEFAULT_BACKUP_CHANNEL = '-1002110340097'
 DEFAULT_BACKUP_CHANNEL_LINK = 'https://t.me/+FFG2MEKtQsxkMTQ9'
 DEFAULT_OTP_CHANNEL = '@OrangeTrack'
 
