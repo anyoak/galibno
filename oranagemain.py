@@ -551,11 +551,8 @@ def process_completed_call(driver, call_info, call_uuid):
         
         # Try to download the voice recording
         if download_voice_recording(driver, call_info, call_uuid, file_path):
-            # Extract OTP from the audio
-            otp = extract_otp_from_audio(file_path)
-            
-            # Send to GROUP with voice and OTP information
-            send_to_group_with_voice(call_info, file_path, otp)
+            # Send to GROUP with voice (OTP removed)
+            send_to_group_with_voice(call_info, file_path)
         else:
             # If download fails, send failure message to group
             send_download_failed_to_group(call_info)
@@ -622,42 +619,40 @@ def download_voice_recording(driver, call_info, call_uuid, file_path):
         print(f"[❌] Voice download error: {e}")
         return False
 
-def send_to_group_with_voice(call_info, file_path, otp):
-    """Send voice recording to group with OTP information"""
+def send_to_group_with_voice(call_info, file_path):
+    """Send voice recording to group with masked number format (OTP removed)"""
     try:
         call_time = call_info['detected_at'].strftime('%Y-%m-%d %I:%M:%S %p')
         
-        # Build caption for group
-        caption = (
-            f"⏰ Time: {call_time}\n"
-            f"{call_info['flag']} Country: {call_info['country']}\n"
-            f"📞 Number: {call_info['did_number']}\n"
-        )
-        
-        # Add OTP information if detected
-        if otp:
-            caption += f"🔢 OTP: {otp}\n"
+        # Mask the phone number in format: 8559****473
+        number = call_info['did_number']
+        if len(number) >= 8:
+            # Show first 4 digits, then 4 asterisks, then last 3 digits
+            masked_number = number[:4] + "****" + number[-3:]
         else:
-            caption += "❌ OTP: Not detected\n"
+            # Fallback for shorter numbers
+            masked_number = number[:4] + "****" + number[4:]
         
-        caption += "\n🌟 Configure by @professor_cry"
+        # Build caption in the requested format
+        caption = (
+            "📳 New Call Captured!\n\n"
+            f"└ ⏰ Time: {call_time}\n"
+            f"└ {call_info['flag']} {call_info['country']}\n"
+            f"└ 📞 Number: {masked_number}\n"
+        )
         
         # Send voice to group
         if send_voice_to_group(file_path, caption):
             print(f"[✅] Voice sent to group successfully: {call_info['did_number']}")
         else:
-            # Fallback with text message
+            # Fallback with text message in same format
             text_fallback = (
-                f"⏰ Time: {call_time}\n"
-                f"{call_info['flag']} Country: {call_info['country']}\n"
-                f"📞 Number: {call_info['did_number']}\n"
+                "📳 New Call Captured!\n\n"
+                f"└ ⏰ Time: {call_time}\n"
+                f"└ {call_info['flag']} {call_info['country']}\n"
+                f"└ 📞 Number: {masked_number}\n"
             )
-            if otp:
-                text_fallback += f"🔢 OTP: {otp}\n"
-            else:
-                text_fallback += "❌ OTP: Not detected\n"
             
-            text_fallback += "\n🌟 Configure by @professor_cry"
             send_message_to_group(text_fallback)
             
         # Clean up file
@@ -670,16 +665,25 @@ def send_to_group_with_voice(call_info, file_path, otp):
         print(f"[❌] Error sending to group: {e}")
 
 def send_download_failed_to_group(call_info):
-    """Send download failure message to group"""
+    """Send download failure message to group in masked number format"""
     try:
         call_time = call_info['detected_at'].strftime('%Y-%m-%d %I:%M:%S %p')
         
+        # Mask the phone number in format: 8559****473
+        number = call_info['did_number']
+        if len(number) >= 8:
+            # Show first 4 digits, then 4 asterisks, then last 3 digits
+            masked_number = number[:4] + "****" + number[-3:]
+        else:
+            # Fallback for shorter numbers
+            masked_number = number[:4] + "****" + number[4:]
+        
         failure_text = (
-            f"⏰ Time: {call_time}\n"
-            f"{call_info['flag']} Country: {call_info['country']}\n"
-            f"📞 Number: {call_info['did_number']}\n"
-            f"❌ Voice download failed\n\n"
-            f"🌟 Configure by @professor_cry"
+            "😟 Please contact group admin for error call OTP\n\n"
+            f"└ ⏰ Time: {call_time}\n"
+            f"└ {call_info['flag']} {call_info['country']}\n"
+            f"└ 📞 Number: {masked_number}\n"
+            f"└ ❌ Voice download failed\n"
         )
         
         send_message_to_group(failure_text)
