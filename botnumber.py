@@ -580,7 +580,7 @@ def show_main_menu(chat_id, user_id):
                     "🌍 Welcome to the Global Virtual Number Hub!\n\n"
                     "✨ Choose a country to get a unique phone number for verification purposes.\n"
                     "🔐 All numbers are private and secure.\n\n"
-                    "```Select a country from the options below:```",
+                    "⏬ Select a country from the options below:",
                     reply_markup=markup)
 
 # Callback query handler
