@@ -15,7 +15,7 @@ import requests
 CONFIG = {
     'base_url': 'https://web.facebook.com/login/identify/?ctx=recover&from_login_screen=0',
     'phone_numbers_file': 'phone_numbers.txt',
-    'telegram_bot_token': 'YOUR_TELEGRAM_BOT_TOKEN',
+    'telegram_bot_token': '8301109365:AAEyEPV0qT2V1ecI8vQK3i69wgV1taKQOck',
     'telegram_channel_id': '-1003481502962',
     'timeout': 30
 }
