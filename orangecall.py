@@ -576,10 +576,10 @@ def send_to_group_with_voice(call_info, file_path):
         
         # Build caption in the requested format
         caption = (
-            "📳 New Call Captured!\n\n"
-            f"└ ⏰ Time: {call_time}\n"
+            "🥂 New Call Captured!\n\n"
+            f"└ ⏰ {call_time}\n"
             f"└ {call_info['flag']} {call_info['country']}\n"
-            f"└ 📞 Number: {call_info['masked']}\n"
+            f"└ 📞 {call_info['masked']}\n"
         )
         
         # Send voice to group (this message will NOT be deleted)
