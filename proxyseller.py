@@ -1,5 +1,6 @@
 import logging
 import requests
+
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -17,12 +18,15 @@ from telegram.ext import (
 
 # ---------------- CONFIGURATION ----------------
 
-# ⚠️ এগুলো নিজের মতো করে সেট করো
-BOT_TOKEN = "8268326998:AAG1Cu7Fv0VTMlQ6Xx8dJVRG20TJRN5Fa3Q"
-API_KEY = "de35ee3af144849b4b912b190f3f6f93"
-ADMIN_ID = 6577308099  # তোমার টেলিগ্রাম numeric user id
+BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"          # ← এখানে তোমার বট টোকেন
+API_KEY = "YOUR_PROXY_SELLER_API_KEY"         # ← এখানে Proxy-Seller API key
+ADMIN_ID = 123456789                          # ← তোমার Telegram numeric user ID
 
 BASE_URL = "https://proxy-seller.com/personal/api/v1"
+
+# Proxy host/port (তোমার প্যানেল থেকে যা আছে সেটাই দাও)
+PROXY_HOST = "res.proxy-seller.com"
+PROXY_PORT = 10000
 
 # Conversation states
 (
@@ -44,8 +48,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ---------------- PROXY MANAGER CLASS ----------------
-
+# ---------------- PROXY MANAGER ----------------
 
 class ProxyManager:
     def __init__(self, api_key: str):
@@ -55,14 +58,8 @@ class ProxyManager:
     # -------- Sub user management --------
 
     def create_sub_user(self, traffic_gb: str) -> str:
-        """
-        Create sub user package from main residential package.
-        Docs: POST /{apiKey}/residentsubuser/create
-        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/create"
-
-            # GB → bytes
             traffic_bytes = int(traffic_gb) * 1024 * 1024 * 1024
             data = {"traffic_limit": str(traffic_bytes)}
 
@@ -74,15 +71,13 @@ class ProxyManager:
                 data = result.get("data", {})
                 package_key = data.get("package_key", "N/A")
                 expired_at = data.get("expired_at", "N/A")
-
-                msg = (
+                return (
                     "✅ Sub user created successfully.\n\n"
-                    f"🆔 Sub User ID: {package_key}\n"
+                    f"🆔 Sub User ID: `{package_key}`\n"
                     f"💾 Traffic: {traffic_gb} GB\n"
                     f"📅 Expiry: {expired_at}\n"
                     f"🔧 Status: {'Active' if data.get('is_active') else 'Inactive'}"
                 )
-                return msg
             else:
                 errors = result.get("errors") or []
                 error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
@@ -93,24 +88,16 @@ class ProxyManager:
             return f"❌ API Error: {str(e)}"
 
     def delete_sub_user(self, package_key: str) -> str:
-        """
-        Delete subuser package.
-        Docs: DELETE /{apiKey}/residentsubuser/delete
-        (তোমার আগের কোডের POST ভার্সনও কাজ করতে পারে, কিন্তু ডকে এখন DELETE দেখানো আছে)
-        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/delete"
             data = {"package_key": package_key}
 
-            # অনেক সার্ভার DELETE+JSON সাপোর্ট করে না, তাই POST fallback ভালো।
-            # Proxy-Seller ডকে এই endpoint DELETE বলা, কিন্তু অনেক উদাহরণে POST ও আছে।
-            # তাই POST রেখে দিচ্ছি।
             response = requests.post(url, json=data, timeout=30)
             result = response.json()
             logger.info(f"Delete sub user response: {result}")
 
             if result.get("status") == "success":
-                return f"✅ Sub user {package_key} deleted successfully."
+                return f"✅ Sub user `{package_key}` deleted successfully."
             else:
                 errors = result.get("errors") or []
                 error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
@@ -120,13 +107,9 @@ class ProxyManager:
             logger.error(f"Delete sub user error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
 
-    # -------- Package info / dashboard --------
+    # -------- Dashboard --------
 
     def get_package_info(self, package_key: str) -> str:
-        """
-        Get subuser package information.
-        Docs: GET /{apiKey}/residentsubuser/packages
-        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/packages"
             response = requests.get(url, timeout=30)
@@ -138,9 +121,7 @@ class ProxyManager:
                 error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
                 return f"❌ Error: {error_msg}"
 
-            packages = result.get("data", [])
-
-            for pkg in packages:
+            for pkg in result.get("data", []):
                 if pkg.get("package_key") == package_key:
                     traffic_limit_gb = int(pkg.get("traffic_limit", 0)) / (1024**3)
                     traffic_usage_gb = int(pkg.get("traffic_usage", 0)) / (1024**3)
@@ -154,9 +135,9 @@ class ProxyManager:
                     if isinstance(expired_at, dict):
                         expired_at = expired_at.get("date", "N/A")
 
-                    text = (
+                    return (
                         "📊 DASHBOARD\n\n"
-                        f"🆔 Sub User ID: {package_key}\n"
+                        f"🆔 Sub User ID: `{package_key}`\n"
                         f"📅 Expiry: {expired_at}\n"
                         f"🔧 Status: {'🟢 Active' if pkg.get('is_active') else '🔴 Inactive'}\n"
                         f"🔄 Default rotation: {pkg.get('rotation', 'N/A')}s\n\n"
@@ -169,7 +150,6 @@ class ProxyManager:
                         f"• Used:  {traffic_usage_sub_gb:.2f} GB\n"
                         f"• Left:  {traffic_left_sub_gb:.2f} GB\n"
                     )
-                    return text
 
             return "❌ Sub user ID not found under your account."
 
@@ -177,14 +157,9 @@ class ProxyManager:
             logger.error(f"Get package info error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
 
-    # -------- IP lists (subuser) --------
+    # -------- Lists --------
 
     def get_subuser_lists(self, package_key: str):
-        """
-        Retrieve all created lists in subuser package.
-        Docs: GET /{apiKey}/residentsubuser/lists?package_key=...
-        Return: (True, items) or (False, error_message)
-        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/lists"
             params = {"package_key": package_key}
@@ -194,8 +169,7 @@ class ProxyManager:
 
             if result.get("status") == "success":
                 data = result.get("data") or {}
-                items = data.get("items") or []
-                return True, items
+                return True, data.get("items") or []
 
             errors = result.get("errors") or []
             error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
@@ -207,9 +181,9 @@ class ProxyManager:
 
     def change_rotation(self, list_id: int, package_key: str, rotation_value: str) -> str:
         """
-        Change rotation for a specific IP list in subuser package.
-        Docs: POST /{apiKey}/residentsubuser/list/rotation
-        Body: { id, rotation, package_key }
+        Rotation update করলেও রিটার্নটা একই ফরম্যাটে:
+        Your Sub User Id: `...`
+        Proxy Connection Details : `host:port:login:password`
         """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/list/rotation"
@@ -238,69 +212,58 @@ class ProxyManager:
                 return f"❌ Error changing rotation: {error_msg}"
 
             data = result.get("data") or {}
-            geo = data.get("geo") or {}
-            export = data.get("export") or {}
+            geo_raw = data.get("geo") or {}
+            export_raw = data.get("export") or {}
 
-            if rotation_int == -1:
-                rotation_desc = "Sticky (no rotation)"
-            elif rotation_int == 0:
-                rotation_desc = "Rotation per request"
+            # geo normalize
+            if isinstance(geo_raw, list):
+                geo = geo_raw[0] if geo_raw else {}
+            elif isinstance(geo_raw, dict):
+                geo = geo_raw
             else:
-                rotation_desc = f"Rotation every {rotation_int} seconds"
+                geo = {}
 
-            host = "res.proxy-seller.com"  # সাধারণত এটাই; প্যানেল থেকে কনফার্ম করা ভালো
-            port = export.get("ports", 10000)
+            export = export_raw if isinstance(export_raw, dict) else {}
+
             login = data.get("login", "N/A")
             password = data.get("password", "N/A")
 
-            conn_str = f"{login}:{password}@{host}:{port}"
+            # host/port constant থেকে
+            proxy_string = f"{PROXY_HOST}:{PROXY_PORT}:{login}:{password}"
 
-            text = (
-                "🔄 Rotation updated successfully.\n\n"
-                f"🆔 List ID: {data.get('id', list_id)}\n"
-                f"📛 Title: {data.get('title', 'N/A')}\n"
-                f"⚙️ Rotation: {rotation_desc}\n\n"
-                "🌍 GEO:\n"
-                f"• Country: {geo.get('country', 'N/A')}\n"
-                f"• Region:  {geo.get('region', 'N/A')}\n"
-                f"• City:    {geo.get('city', 'N/A')}\n"
-                f"• ISP:     {geo.get('isp', 'N/A')}\n\n"
-                "🔧 Connection:\n"
-                f"• Host: {host}\n"
-                f"• Port: {port}\n"
-                f"• User: {login}\n"
-                f"• Pass: {password}\n\n"
-                "🔗 Connection string:\n"
-                f"{conn_str}\n"
+            # চাইলে এখানে rotation info ছোট করে mention করলাম
+            if rotation_int == -1:
+                rotation_desc = "Sticky"
+            elif rotation_int == 0:
+                rotation_desc = "Per request"
+            else:
+                rotation_desc = f"Every {rotation_int}s"
+
+            return (
+                f"✅ Rotation Updated ({rotation_desc})\n\n"
+                f"Your Sub User Id: `{package_key}`\n"
+                f"Proxy Connection Details : `{proxy_string}`"
             )
-            return text
 
         except Exception as e:
             logger.error(f"Change rotation error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
 
-    # -------- Country list / geo helpers --------
+    # -------- Country list / geo --------
 
     def get_available_countries(self):
-        """
-        Get all available GEO locations and map to list of countries.
-        Docs: GET /{apiKey}/resident/geo
-        Fallback: built-in world list.
-        """
         try:
             url = f"{self.base_url}/{self.api_key}/resident/geo"
             response = requests.get(url, timeout=30)
             result = response.json()
             logger.info(f"Get GEO countries response: {result}")
 
-            if not isinstance(result, list):
-                # যদি status/data wrapper থাকে, adjust
-                if isinstance(result, dict) and isinstance(result.get("data"), list):
-                    raw_list = result["data"]
-                else:
-                    return self.get_worldwide_countries()
-            else:
+            if isinstance(result, list):
                 raw_list = result
+            elif isinstance(result, dict) and isinstance(result.get("data"), list):
+                raw_list = result["data"]
+            else:
+                return self.get_worldwide_countries()
 
             countries = []
             for item in raw_list:
@@ -309,22 +272,16 @@ class ProxyManager:
                 if code and name:
                     countries.append({"country": name, "code": code})
 
-            if not countries:
-                return self.get_worldwide_countries()
-
-            return countries
+            return countries or self.get_worldwide_countries()
 
         except Exception as e:
             logger.error(f"Get countries error: {e}", exc_info=True)
             return self.get_worldwide_countries()
 
     def get_worldwide_countries(self):
-        """
-        Static fallback country list (ISO-2 codes).
-        """
         return [
             {"country": "United States", "code": "US"},
-			{"country": "United Kingdom", "code": "GB"},
+            {"country": "United Kingdom", "code": "GB"},
             {"country": "Canada", "code": "CA"},
             {"country": "Germany", "code": "DE"},
             {"country": "France", "code": "FR"},
@@ -527,7 +484,7 @@ class ProxyManager:
                 name2 = c2.get("country", "Unknown")[:18]
                 row.append(
                     InlineKeyboardButton(
-                        f"🌍 {name2}",
+                        f"{name2}",
                         callback_data=f"country_{c2['code']}_{c2['country']}",
                     )
                 )
@@ -536,16 +493,10 @@ class ProxyManager:
 
         nav_row = []
         if page > 0:
-            nav_row.append(
-                InlineKeyboardButton("⬅️ Prev", callback_data=f"page_{page - 1}")
-            )
-        nav_row.append(
-            InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="current_page")
-        )
+            nav_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"page_{page - 1}"))
+        nav_row.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="current_page"))
         if page < total_pages - 1:
-            nav_row.append(
-                InlineKeyboardButton("Next ➡️", callback_data=f"page_{page + 1}")
-            )
+            nav_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"page_{page + 1}"))
         keyboard.append(nav_row)
 
         keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_country")])
@@ -554,23 +505,20 @@ class ProxyManager:
 
     def create_country_list(self, package_key: str, country_code: str, country_name: str) -> str:
         """
-        Create IP list in subuser package for specific country.
-        Docs: POST /{apiKey}/residentsubuser/list/add
+        Country select করার পরে ইউজারকে সরাসরি:
+        Your Sub User Id: `...`
+        Proxy Connection Details : `host:port:login:password`
+        এই ফরম্যাটে রিটার্ন।
         """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/list/add"
 
             data = {
                 "title": f"{country_name} Residential List",
-                "whitelist": "",  # login/password auth
-                "geo": {
-                    "country": country_code,
-                },
-                "export": {
-                    "ports": 100,  # কতগুলো পোর্ট/আইপি চাই
-                    "ext": "txt",
-                },
-                "rotation": -1,  # sticky by default
+                "whitelist": "",
+                "geo": {"country": country_code},
+                "export": {"ports": 100, "ext": "txt"},
+                "rotation": -1,
                 "package_key": package_key,
             }
 
@@ -584,45 +532,34 @@ class ProxyManager:
                 return f"❌ Error creating IP list: {error_msg}"
 
             data = result.get("data") or {}
-            geo = data.get("geo") or {}
-            export = data.get("export") or {}
+            geo_raw = data.get("geo") or {}
+            export_raw = data.get("export") or {}
 
-            host = "res.proxy-seller.com"  # সাধারণত এটা; তোমার ড্যাশবোর্ডে দেখানো host use করবে
-            port = export.get("ports", 10000)
+            if isinstance(geo_raw, list):
+                geo = geo_raw[0] if geo_raw else {}
+            elif isinstance(geo_raw, dict):
+                geo = geo_raw
+            else:
+                geo = {}
+
+            export = export_raw if isinstance(export_raw, dict) else {}
+
             login = data.get("login", "N/A")
             password = data.get("password", "N/A")
 
-            conn_str = f"{login}:{password}@{host}:{port}"
-            direct_link = f"http://{conn_str}"
+            proxy_string = f"{PROXY_HOST}:{PROXY_PORT}:{login}:{password}"
 
-            text = (
-                "🌍 Country IP list created successfully.\n\n"
-                f"🆔 List ID: {data.get('id', 'N/A')}\n"
-                f"📛 Title: {data.get('title', 'N/A')}\n\n"
-                "📍 GEO:\n"
-                f"• Country: {geo.get('country', country_code)} ({country_name})\n"
-                f"• Region:  {geo.get('region', 'Any')}\n"
-                f"• City:    {geo.get('city', 'Any')}\n"
-                f"• ISP:     {geo.get('isp', 'Any')}\n\n"
-                "🔧 Connection info:\n"
-                f"• Host: {host}\n"
-                f"• Port: {port}\n"
-                f"• User: {login}\n"
-                f"• Pass: {password}\n\n"
-                "🔗 Connection string:\n"
-                f"{conn_str}\n\n"
-                "🌐 Direct URL format:\n"
-                f"{direct_link}\n\n"
-                "💡 Note: Use this proxy in any app that supports HTTP(S)/SOCKS5 proxies."
+            return (
+                f"Your Sub User Id: `{package_key}`\n"
+                f"Proxy Connection Details : `{proxy_string}`"
             )
-            return text
 
         except Exception as e:
             logger.error(f"Create country list error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
 
 
-# Initialize ProxyManager
+# Initialize manager
 proxy_mgr = ProxyManager(API_KEY)
 
 
@@ -640,7 +577,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👤 User commands:\n"
             "/dashboard - Check usage\n"
             "/change_rotation - Change rotation for IP list\n"
-            "/change_country - Create IP list for specific country\n"
+            "/change_country - Create country-specific IP list\n"
             "/support - Contact support"
         )
     else:
@@ -652,11 +589,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/change_country - Create country-specific IP list\n"
             "/support - Get help"
         )
-
     await update.message.reply_text(text)
 
 
-# ---- Create sub user (admin) ----
+# --- create sub user ---
 
 async def create_sub_user_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -680,7 +616,7 @@ async def receive_gb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# ---- Delete sub user (admin) ----
+# --- delete sub user ---
 
 async def delete_sub_user_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -699,7 +635,7 @@ async def receive_delete_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# ---- Broadcast (admin) ----
+# --- broadcast ---
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -714,7 +650,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Usage: /broadcast <your_message>")
 
 
-# ---- Dashboard ----
+# --- dashboard ---
 
 async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📊 Send your sub user ID (package_key):")
@@ -729,7 +665,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# ---- Change rotation (with list selection) ----
+# --- change rotation ---
 
 async def change_rotation_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔄 Send your sub user ID (package_key):")
@@ -754,35 +690,29 @@ async def rotation_receive_package(update: Update, context: ContextTypes.DEFAULT
         context.user_data.pop("package_key", None)
         return ConversationHandler.END
 
-    # যদি একটাই list থাকে, সরাসরি ব্যবহার
     if len(items) == 1:
         list_id = items[0].get("id")
-        title = items[0].get("title", "N/A")
         context.user_data["list_id"] = list_id
         await update.message.reply_text(
-            f"📋 Found one IP list:\nID: {list_id}\nTitle: {title}\n\n"
+            "📋 Found one IP list.\n\n"
             "Now send rotation value:\n"
-            "-1 = Sticky\n"
+            "-1 = Sticky (no rotation)\n"
             "0 = Per request\n"
-            "1–3600 = seconds"
+            "1–3600 = Seconds"
         )
         return WAITING_ROTATION_VALUE
 
-    # একাধিক list → inline keyboard
     keyboard = []
     for item in items:
         list_id = item.get("id")
         title = item.get("title", "N/A")[:30]
         geo = item.get("geo") or {}
+        if isinstance(geo, list):
+            geo = geo[0] if geo else {}
         country = geo.get("country", "Any")
         btn_text = f"ID {list_id} | {country} | {title}"
         keyboard.append(
-            [
-                InlineKeyboardButton(
-                    btn_text,
-                    callback_data=f"rotlist_{list_id}",
-                )
-            ]
+            [InlineKeyboardButton(btn_text, callback_data=f"rotlist_{list_id}")]
         )
 
     keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="rotlist_cancel")])
@@ -847,7 +777,7 @@ async def perform_rotation_change(update: Update, context: ContextTypes.DEFAULT_
     return ConversationHandler.END
 
 
-# ---- Change country / create IP list ----
+# --- change country ---
 
 async def change_country_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🌍 Send your sub user ID (package_key):")
@@ -862,7 +792,8 @@ async def ask_country_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await update.message.reply_text(
         "🌍 Choose your proxy country.\n"
-        "Use Next/Prev buttons to browse, then tap a country to create an IP list.",
+        "Use Next/Prev buttons to browse, then tap a country.\n"
+        "You'll get ready-to-use connection string.",
         reply_markup=reply_markup,
     )
 
@@ -875,13 +806,11 @@ async def handle_country_selection(update: Update, context: ContextTypes.DEFAULT
 
     data = query.data
 
-    # Cancel
     if data == "cancel_country":
         context.user_data.pop("package_key", None)
         await query.edit_message_text("❌ Country selection cancelled.")
         return ConversationHandler.END
 
-    # Pagination
     if data.startswith("page_"):
         try:
             page = int(data.split("_")[1])
@@ -891,7 +820,6 @@ async def handle_country_selection(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_reply_markup(reply_markup=reply_markup)
         return CHOOSING_COUNTRY
 
-    # Country chosen
     if data.startswith("country_"):
         parts = data.split("_", 2)
         if len(parts) != 3:
@@ -901,8 +829,8 @@ async def handle_country_selection(update: Update, context: ContextTypes.DEFAULT
 
         country_code = parts[1]
         country_name = parts[2]
-
         package_key = context.user_data.get("package_key")
+
         if not package_key:
             await query.edit_message_text("❌ Sub user ID missing. Please start again.")
             return ConversationHandler.END
@@ -910,7 +838,6 @@ async def handle_country_selection(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text(f"⏳ Creating IP list for {country_name} ({country_code})...")
 
         result = proxy_mgr.create_country_list(package_key, country_code, country_name)
-
         await context.bot.send_message(chat_id=query.message.chat_id, text=result)
 
         context.user_data.pop("package_key", None)
@@ -919,28 +846,23 @@ async def handle_country_selection(update: Update, context: ContextTypes.DEFAULT
     return CHOOSING_COUNTRY
 
 
-# ---- Support ----
+# --- support / cancel / error ---
 
 async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "🆘 Support\n\n"
         "For help, contact:\n"
         "👉 @professor_cry\n\n"
-        "Available: 24/7\n"
-        "We can help with setup, billing, technical issues, packages and more."
+        "Available: 24/7"
     )
     await update.message.reply_text(text)
 
-
-# ---- Cancel (fallback) ----
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("❌ Operation cancelled.")
     return ConversationHandler.END
 
-
-# ---- Global error handler ----
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error("Exception while handling update:", exc_info=context.error)
@@ -959,35 +881,23 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Error handler
     application.add_error_handler(error_handler)
 
-    # Conversation handlers
     create_conv = ConversationHandler(
         entry_points=[CommandHandler("create", create_sub_user_cmd)],
-        states={
-            WAITING_GB: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_gb)],
-        },
+        states={WAITING_GB: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_gb)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
     delete_conv = ConversationHandler(
         entry_points=[CommandHandler("delete", delete_sub_user_cmd)],
-        states={
-            WAITING_DELETE_ID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_delete_id)
-            ],
-        },
+        states={WAITING_DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_delete_id)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
     dashboard_conv = ConversationHandler(
         entry_points=[CommandHandler("dashboard", dashboard)],
-        states={
-            WAITING_SUB_USER_ID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, show_dashboard)
-            ],
-        },
+        states={WAITING_SUB_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, show_dashboard)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
@@ -1021,19 +931,17 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    # Basic commands
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("support", support))
     application.add_handler(CommandHandler("broadcast", broadcast))
 
-    # Conversations
     application.add_handler(create_conv)
     application.add_handler(delete_conv)
     application.add_handler(dashboard_conv)
     application.add_handler(rotation_conv)
     application.add_handler(country_conv)
 
-    logger.info("🤖 Proxy Manager Bot is starting...")
+    logger.info("🤖 Proxy Manager Bot starting...")
     logger.info(f"🔧 Admin ID: {ADMIN_ID}")
 
     application.run_polling(drop_pending_updates=True)
