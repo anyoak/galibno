@@ -256,7 +256,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     # Validate configuration
-    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+    if BOT_TOKEN == "8268326998:AAG1Cu7Fv0VTMlQ6Xx8dJVRG20TJRN5Fa3Q":
         print("❌ ERROR: Please set your BOT_TOKEN in the configuration")
         return
     if API_KEY == "de35ee3af144849b4b912b190f3f6f93":
