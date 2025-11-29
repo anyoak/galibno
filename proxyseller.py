@@ -71,7 +71,7 @@ class ProxyManager:
             return f"❌ API Error: {str(e)}"
     
     def get_package_info(self, package_key):
-        """Get package information for dashboard - FIXED VERSION"""
+        """Get package information for dashboard"""
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/packages"
             
@@ -94,7 +94,6 @@ class ProxyManager:
                         if isinstance(expired_at, dict):
                             expired_at = expired_at.get('date', 'N/A')
                         
-                        # Fixed dashboard text without markdown formatting issues
                         dashboard_text = f"""
 📊 DASHBOARD
 
@@ -124,35 +123,16 @@ class ProxyManager:
             logger.error(f"Get package info error: {e}")
             return f"❌ API Error: {str(e)}"
     
-    def get_available_countries(self):
-        """Get list of available countries from Proxy Seller"""
-        # This would typically come from your Proxy Seller API
-        # For now, returning a static list of commonly available countries
-        countries = [
-            "US - United States",
-            "UK - United Kingdom", 
-            "DE - Germany",
-            "FR - France",
-            "CA - Canada",
-            "NL - Netherlands",
-            "SG - Singapore",
-            "JP - Japan",
-            "AU - Australia",
-            "BR - Brazil"
-        ]
-        return countries
-    
     def change_country(self, package_key, country_code):
         """Change country/rotation for sub user"""
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/list/rotation"
             
-            # Extract country code from selection (e.g., "US" from "US - United States")
-            if " - " in country_code:
-                country_code = country_code.split(" - ")[0]
+            # Clean the country code
+            country_code = country_code.upper().strip()
             
-            # For now, we'll use a fixed rotation time
-            # In a real implementation, you might want to map countries to specific rotation settings
+            # For Proxy Seller API, we use rotation parameter
+            # The API will automatically assign a proxy from the selected country
             data = {
                 "package_key": package_key, 
                 "rotation": 60  # 60 seconds rotation
@@ -198,8 +178,40 @@ class ProxyManager:
 # Initialize proxy manager
 proxy_mgr = ProxyManager(API_KEY)
 
-# Store temporary data for conversations
-user_data = {}
+# Available countries - you can expand this list
+AVAILABLE_COUNTRIES = {
+    'US': 'United States',
+    'UK': 'United Kingdom', 
+    'GB': 'United Kingdom',
+    'DE': 'Germany',
+    'FR': 'France',
+    'CA': 'Canada',
+    'NL': 'Netherlands',
+    'SG': 'Singapore',
+    'JP': 'Japan',
+    'AU': 'Australia',
+    'BR': 'Brazil',
+    'IN': 'India',
+    'RU': 'Russia',
+    'CH': 'Switzerland',
+    'SE': 'Sweden',
+    'NO': 'Norway',
+    'DK': 'Denmark',
+    'FI': 'Finland',
+    'PL': 'Poland',
+    'IT': 'Italy',
+    'ES': 'Spain',
+    'PT': 'Portugal',
+    'BE': 'Belgium',
+    'AT': 'Austria',
+    'IE': 'Ireland',
+    'NZ': 'New Zealand',
+    'KR': 'South Korea',
+    'HK': 'Hong Kong',
+    'TW': 'Taiwan',
+    'TR': 'Turkey',
+    'UA': 'Ukraine'
+}
 
 # Command Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -279,66 +291,63 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package_key = update.message.text.strip()
     await update.message.reply_text("⏳ Retrieving package information...")
     result = proxy_mgr.get_package_info(package_key)
-    # Send without parse_mode to avoid markdown issues
     await update.message.reply_text(result)
     return ConversationHandler.END
 
 async def change_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🌍 Enter your Sub User ID to change region:")
+    await update.message.reply_text("🌍 Enter your Sub User ID:")
     return WAITING_COUNTRY_CHANGE
 
-async def ask_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ask user to select a country after entering sub user ID"""
+async def ask_country_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ask for country code after receiving sub user ID"""
     package_key = update.message.text.strip()
     
     # Store package key in context for later use
     context.user_data['package_key'] = package_key
     
-    # Get available countries
-    countries = proxy_mgr.get_available_countries()
+    # Ask for country code directly
+    message = """
+🌍 COUNTRY SELECTION
+
+Available countries (use 2-letter codes):
+
+US  - United States
+UK  - United Kingdom  
+DE  - Germany
+FR  - France
+CA  - Canada
+NL  - Netherlands
+SG  - Singapore
+JP  - Japan
+AU  - Australia
+BR  - Brazil
+IN  - India
+and more...
+
+📝 Please enter the country code (e.g., US, UK, DE):
+    """
     
-    country_list = "🌍 AVAILABLE COUNTRIES:\n\n"
-    for i, country in enumerate(countries, 1):
-        country_list += f"{i}. {country}\n"
-    
-    country_list += "\nPlease reply with the number or country code (e.g., '1' or 'US'):"
-    
-    await update.message.reply_text(country_list)
-    return WAITING_COUNTRY_CHANGE
+    await update.message.reply_text(message)
+    return WAITING_COUNTRY_CHANGE + 1  # Next state
 
 async def perform_country_change(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Perform the country change after user selects country"""
-    user_input = update.message.text.strip()
+    """Perform the country change after user provides country code"""
+    country_code = update.message.text.strip().upper()
     package_key = context.user_data.get('package_key')
     
     if not package_key:
         await update.message.reply_text("❌ Error: Sub User ID not found. Please start over.")
         return ConversationHandler.END
     
-    # Get available countries
-    countries = proxy_mgr.get_available_countries()
-    selected_country = None
+    # Validate country code
+    if country_code not in AVAILABLE_COUNTRIES:
+        await update.message.reply_text(f"❌ Invalid country code: {country_code}\n\nPlease enter a valid 2-letter country code (e.g., US, UK, DE)")
+        return WAITING_COUNTRY_CHANGE + 1
     
-    # Handle numeric selection
-    if user_input.isdigit():
-        index = int(user_input) - 1
-        if 0 <= index < len(countries):
-            selected_country = countries[index]
+    country_name = AVAILABLE_COUNTRIES[country_code]
     
-    # Handle country code selection
-    else:
-        user_input_upper = user_input.upper()
-        for country in countries:
-            if country.startswith(user_input_upper):
-                selected_country = country
-                break
-    
-    if not selected_country:
-        await update.message.reply_text("❌ Invalid selection. Please try again with a valid number or country code.")
-        return WAITING_COUNTRY_CHANGE
-    
-    await update.message.reply_text(f"⏳ Changing region to {selected_country}...")
-    result = proxy_mgr.change_country(package_key, selected_country)
+    await update.message.reply_text(f"⏳ Changing region to {country_name} ({country_code})...")
+    result = proxy_mgr.change_country(package_key, country_code)
     await update.message.reply_text(result)
     
     # Clean up
@@ -397,11 +406,14 @@ def main():
         fallbacks=[CommandHandler('cancel', cancel)]
     )
 
+    # Updated country conversation handler with two steps
     country_conv = ConversationHandler(
         entry_points=[CommandHandler('change_country', change_country)],
         states={
             WAITING_COUNTRY_CHANGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_country_selection),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_country_code)
+            ],
+            WAITING_COUNTRY_CHANGE + 1: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, perform_country_change)
             ]
         },
@@ -421,7 +433,7 @@ def main():
     # Start bot with auto-restart capability
     print("🤖 Proxy Manager Bot is starting...")
     print(f"🔧 Admin ID: {ADMIN_ID}")
-    print(f"🌐 API Base URL: {BASE_URL}")
+    print(f"🌐 Available Countries: {len(AVAILABLE_COUNTRIES)} countries")
     
     while True:
         try:
