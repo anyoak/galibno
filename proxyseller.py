@@ -10,10 +10,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configuration - Replace with your actual credentials
-BOT_TOKEN = "8268326998:AAG1Cu7Fv0V***Q6Xx8dJVRG20TJRN5Fa3Q"
-API_KEY = "de35ee3af144849***912b190f3f6f93"
-ADMIN_ID = 657**08099
+# Configuration - Your actual credentials
+BOT_TOKEN = "8268326998:AAG1Cu7Fv0VTMlQ6Xx8dJVRG20TJRN5Fa3Q"
+API_KEY = "de35ee3af144849b4b912b190f3f6f93"
+ADMIN_ID = 6577308099
 
 BASE_URL = "https://proxy-seller.com/personal/api/v1"
 
@@ -37,6 +37,7 @@ class ProxyManager:
             
             response = requests.post(url, json=data, timeout=30)
             result = response.json()
+            logger.info(f"Create sub user response: {result}")
             
             if result.get('status') == 'success':
                 package_key = result['data']['package_key']
@@ -46,6 +47,7 @@ class ProxyManager:
                 return f"❌ Error: {error_msg}"
                 
         except Exception as e:
+            logger.error(f"Create sub user error: {e}")
             return f"❌ API Error: {str(e)}"
     
     def delete_sub_user(self, package_key):
@@ -56,6 +58,7 @@ class ProxyManager:
             
             response = requests.post(url, json=data, timeout=30)
             result = response.json()
+            logger.info(f"Delete sub user response: {result}")
             
             if result.get('status') == 'success':
                 return f"✅ Sub User `{package_key}` Deleted Successfully!"
@@ -64,6 +67,7 @@ class ProxyManager:
                 return f"❌ Error: {error_msg}"
                 
         except Exception as e:
+            logger.error(f"Delete sub user error: {e}")
             return f"❌ API Error: {str(e)}"
     
     def get_package_info(self, package_key):
@@ -73,64 +77,103 @@ class ProxyManager:
             
             response = requests.get(url, timeout=30)
             result = response.json()
+            logger.info(f"Get package info response: {result}")
             
             if result.get('status') == 'success':
-                for package in result['data']:
-                    if package['package_key'] == package_key:
-                        # Convert bytes to GB
-                        traffic_limit_gb = int(package['traffic_limit']) / (1024**3)
-                        traffic_usage_gb = int(package['traffic_usage']) / (1024**3)
-                        traffic_left_gb = int(package['traffic_left']) / (1024**3)
+                # The API returns an array of packages, we need to find the right one
+                packages = result.get('data', [])
+                
+                for package in packages:
+                    if package.get('package_key') == package_key:
+                        # Convert bytes to GB for better readability
+                        traffic_limit_gb = int(package.get('traffic_limit', 0)) / (1024**3)
+                        traffic_usage_gb = int(package.get('traffic_usage', 0)) / (1024**3)
+                        traffic_left_gb = int(package.get('traffic_left', 0)) / (1024**3)
+                        
+                        # For sub-user specific traffic (if available)
+                        traffic_usage_sub_gb = int(package.get('traffic_usage_sub', 0)) / (1024**3)
+                        traffic_limit_sub_gb = int(package.get('traffic_limit_sub', 0)) / (1024**3)
+                        traffic_left_sub_gb = int(package.get('traffic_left_sub', 0)) / (1024**3)
                         
                         dashboard_text = f"""
 📊 Dashboard for ID: `{package_key}`
 
 👤 User ID: `{package_key}`
+🔄 Rotation: {package.get('rotation', 'N/A')} seconds
 💾 Total Traffic: {traffic_limit_gb:.2f} GB
 📈 Used Traffic: {traffic_usage_gb:.2f} GB
 📉 Available Traffic: {traffic_left_gb:.2f} GB
-📅 Created Date: {package.get('expired_at', 'N/A')}
-🔧 Status: {'Active' if package['is_active'] else 'Inactive'}
+
+📊 Sub-User Traffic:
+├── Limit: {traffic_limit_sub_gb:.2f} GB
+├── Used: {traffic_usage_sub_gb:.2f} GB
+└── Left: {traffic_left_sub_gb:.2f} GB
+
+📅 Expiry Date: {package.get('expired_at', 'N/A')}
+🔧 Status: {'Active' if package.get('is_active', False) else 'Inactive'}
+🔗 Link Date: {'Yes' if package.get('is_link_date', False) else 'No'}
                         """
                         return dashboard_text
                 
-                return "❌ Sub User ID not found!"
+                return "❌ Sub User ID not found in your packages!"
             else:
                 error_msg = result.get('errors', ['Unknown error'])[0] if result.get('errors') else 'Unknown error'
                 return f"❌ Error: {error_msg}"
                 
         except Exception as e:
+            logger.error(f"Get package info error: {e}")
             return f"❌ API Error: {str(e)}"
     
-    def change_country(self, package_key):
+    def change_country(self, package_key, rotation_time=60):
         """Change country/rotation for sub user"""
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/list/rotation"
-            data = {"package_key": package_key, "rotation": 60}
+            
+            # According to API docs, we need to specify rotation time
+            # -1 = rotation, 0 = rotation per request, 1..3600 = time in seconds
+            data = {
+                "package_key": package_key, 
+                "rotation": rotation_time
+            }
             
             response = requests.post(url, json=data, timeout=30)
             result = response.json()
+            logger.info(f"Change country response: {result}")
             
             if result.get('status') == 'success':
                 data = result['data']
-                geo = data['geo']
+                geo = data.get('geo', {})
+                
+                # Build connection details
+                hostname = data.get('login', 'N/A')
+                port = data.get('export', {}).get('ports', 'N/A')
+                username = data.get('login', 'N/A')
+                password = data.get('password', 'N/A')
                 
                 proxy_info = f"""
 🔄 Rotation Changed Successfully!
 
-🌍 Country: {geo['country']}
-🏛️ Region: {geo['region']}
-🏙️ City: {geo['city']}
-📡 ISP: {geo['isp']}
+📋 Proxy Details:
+├── ID: {data.get('id', 'N/A')}
+├── Title: {data.get('title', 'N/A')}
+└── Rotation: {data.get('rotation', 'N/A')}
+
+🌍 Location Information:
+├── Country: {geo.get('country', 'N/A')}
+├── Region: {geo.get('region', 'N/A')}
+├── City: {geo.get('city', 'N/A')}
+└── ISP: {geo.get('isp', 'N/A')}
 
 🔧 Connection Details:
-Host: {data.get('login', 'N/A')}
-Port: {data['export']['ports']}
-Username: {data['login']}
-Password: {data['password']}
+├── Hostname: {hostname}
+├── Port: {port}
+├── Username: {username}
+└── Password: {password}
 
 🔗 Connection Format:
-`{data['login']}:{data['password']}@proxy-server:{data['export']['ports']}`
+`{hostname}:{port}:{username}:{password}`
+
+📝 Whitelist: {data.get('whitelist', 'Not set')}
                 """
                 return proxy_info
             else:
@@ -138,6 +181,7 @@ Password: {data['password']}
                 return f"❌ Error: {error_msg}"
                 
         except Exception as e:
+            logger.error(f"Change country error: {e}")
             return f"❌ API Error: {str(e)}"
 
 # Initialize proxy manager
@@ -209,7 +253,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if context.args:
         message = " ".join(context.args)
-        # In a production environment, you would broadcast to all registered users
         await update.message.reply_text(f"📢 Broadcast Message Sent:\n\n{message}")
     else:
         await update.message.reply_text("⚠️ Usage: /broadcast <your_message>")
@@ -226,7 +269,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def change_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🌍 Enter your Sub User ID to change region:")
+    await update.message.reply_text("🌍 Enter your Sub User ID to change region/rotation:")
     return WAITING_COUNTRY_CHANGE
 
 async def perform_country_change(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -255,14 +298,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error("Exception occurred:", exc_info=context.error)
 
 def main():
-    # Validate configuration
-    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        print("❌ ERROR: Please set your BOT_TOKEN in the configuration")
-        return
-    if API_KEY == "YOUR_PROXY_SELLER_API_KEY_HERE":
-        print("❌ ERROR: Please set your API_KEY in the configuration")
-        return
-
     # Create application
     application = Application.builder().token(BOT_TOKEN).build()
 
@@ -314,6 +349,8 @@ def main():
 
     # Start bot with auto-restart capability
     print("🤖 Proxy Manager Bot is starting...")
+    print(f"🔧 Admin ID: {ADMIN_ID}")
+    print(f"🌐 API Base URL: {BASE_URL}")
     
     while True:
         try:
