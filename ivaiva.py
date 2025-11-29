@@ -27,7 +27,7 @@ refresh_pattern_index = 0
 refresh_warning_msg_id = None  # Track refresh warning message
 
 # Refresh pattern in seconds
-REFRESH_PATTERN = [3600, 2405, 3100, 1250, 1350]  # 5 minutes average
+REFRESH_PATTERN = [36000, 24005, 31000, 12050, 10350]  # 5 minutes average
 
 os.makedirs(config.DOWNLOAD_FOLDER, exist_ok=True)
 
@@ -145,7 +145,7 @@ def send_message(text, delete_after=None, is_log=False):
                 "inline_keyboard": [
                     [
                         {
-                            "text": f"📋 Copy OTP: {otp_code}",
+                            "text": f"⧉ {otp_code}",
                             "callback_data": "copy_otp"
                         }
                     ]
