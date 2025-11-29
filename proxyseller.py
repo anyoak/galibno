@@ -11,9 +11,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration - Replace with your actual credentials
-BOT_TOKEN = "8268326998:AAG1Cu7Fv0VTMlQ6Xx8dJVRG20TJRN5Fa3Q"
-API_KEY = "de35ee3af144849b4b912b190f3f6f93"
-ADMIN_ID = 6577308099
+BOT_TOKEN = "8268326998:AAG1Cu7Fv0V***Q6Xx8dJVRG20TJRN5Fa3Q"
+API_KEY = "de35ee3af144849***912b190f3f6f93"
+ADMIN_ID = 657**08099
 
 BASE_URL = "https://proxy-seller.com/personal/api/v1"
 
