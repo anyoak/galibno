@@ -1,6 +1,5 @@
 import logging
 import requests
-
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -19,9 +18,9 @@ from telegram.ext import (
 # ---------------- CONFIGURATION ----------------
 
 # ⚠️ এগুলো নিজের মতো করে সেট করো
-BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-API_KEY = "YOUR_PROXY_SELLER_API_KEY"
-ADMIN_ID = 123456789  # তোমার টেলিগ্রাম numeric user id
+BOT_TOKEN = "8268326998:AAG1Cu7Fv0VTMlQ6Xx8dJVRG20TJRN5Fa3Q"
+API_KEY = "de35ee3af144849b4b912b190f3f6f93"
+ADMIN_ID = 6577308099  # তোমার টেলিগ্রাম numeric user id
 
 BASE_URL = "https://proxy-seller.com/personal/api/v1"
 
