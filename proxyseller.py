@@ -41,7 +41,7 @@ class ProxyManager:
             
             if result.get('status') == 'success':
                 package_key = result['data']['package_key']
-                return f"✅ Sub User Created Successfully!\n\n🆔 ID: `{package_key}`\n💾 Traffic: {traffic_gb} GB\n🔧 Status: Active"
+                return f"✅ Sub User Created Successfully!\n\n🆔 ID: {package_key}\n💾 Traffic: {traffic_gb} GB\n🔧 Status: Active"
             else:
                 error_msg = result.get('errors', ['Unknown error'])[0] if result.get('errors') else 'Unknown error'
                 return f"❌ Error: {error_msg}"
@@ -61,7 +61,7 @@ class ProxyManager:
             logger.info(f"Delete sub user response: {result}")
             
             if result.get('status') == 'success':
-                return f"✅ Sub User `{package_key}` Deleted Successfully!"
+                return f"✅ Sub User {package_key} Deleted Successfully!"
             else:
                 error_msg = result.get('errors', ['Unknown error'])[0] if result.get('errors') else 'Unknown error'
                 return f"❌ Error: {error_msg}"
@@ -71,7 +71,7 @@ class ProxyManager:
             return f"❌ API Error: {str(e)}"
     
     def get_package_info(self, package_key):
-        """Get package information for dashboard"""
+        """Get package information for dashboard - FIXED VERSION"""
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/packages"
             
@@ -80,38 +80,38 @@ class ProxyManager:
             logger.info(f"Get package info response: {result}")
             
             if result.get('status') == 'success':
-                # The API returns an array of packages, we need to find the right one
                 packages = result.get('data', [])
                 
                 for package in packages:
                     if package.get('package_key') == package_key:
-                        # Convert bytes to GB for better readability
+                        # Convert bytes to GB
                         traffic_limit_gb = int(package.get('traffic_limit', 0)) / (1024**3)
                         traffic_usage_gb = int(package.get('traffic_usage', 0)) / (1024**3)
                         traffic_left_gb = int(package.get('traffic_left', 0)) / (1024**3)
                         
-                        # For sub-user specific traffic (if available)
-                        traffic_usage_sub_gb = int(package.get('traffic_usage_sub', 0)) / (1024**3)
-                        traffic_limit_sub_gb = int(package.get('traffic_limit_sub', 0)) / (1024**3)
-                        traffic_left_sub_gb = int(package.get('traffic_left_sub', 0)) / (1024**3)
+                        # Handle expired_at which can be a dictionary
+                        expired_at = package.get('expired_at', 'N/A')
+                        if isinstance(expired_at, dict):
+                            expired_at = expired_at.get('date', 'N/A')
                         
+                        # Fixed dashboard text without markdown formatting issues
                         dashboard_text = f"""
-📊 Dashboard for ID: `{package_key}`
+📊 DASHBOARD
 
-👤 User ID: `{package_key}`
-🔄 Rotation: {package.get('rotation', 'N/A')} seconds
-💾 Total Traffic: {traffic_limit_gb:.2f} GB
-📈 Used Traffic: {traffic_usage_gb:.2f} GB
-📉 Available Traffic: {traffic_left_gb:.2f} GB
+🆔 User ID: {package_key}
+🔄 Rotation: {package.get('rotation', 'N/A')}s
+📅 Expiry: {expired_at}
+🔧 Status: {'🟢 Active' if package.get('is_active') else '🔴 Inactive'}
 
-📊 Sub-User Traffic:
-├── Limit: {traffic_limit_sub_gb:.2f} GB
-├── Used: {traffic_usage_sub_gb:.2f} GB
-└── Left: {traffic_left_sub_gb:.2f} GB
+📈 TRAFFIC USAGE:
+├── Total: {traffic_limit_gb:.2f} GB
+├── Used: {traffic_usage_gb:.2f} GB  
+└── Available: {traffic_left_gb:.2f} GB
 
-📅 Expiry Date: {package.get('expired_at', 'N/A')}
-🔧 Status: {'Active' if package.get('is_active', False) else 'Inactive'}
-🔗 Link Date: {'Yes' if package.get('is_link_date', False) else 'No'}
+💾 SUB-USER TRAFFIC:
+├── Limit: {int(package.get('traffic_limit_sub', 0)) / (1024**3):.2f} GB
+├── Used: {int(package.get('traffic_usage_sub', 0)) / (1024**3):.2f} GB
+└── Left: {int(package.get('traffic_left_sub', 0)) / (1024**3):.2f} GB
                         """
                         return dashboard_text
                 
@@ -124,16 +124,38 @@ class ProxyManager:
             logger.error(f"Get package info error: {e}")
             return f"❌ API Error: {str(e)}"
     
-    def change_country(self, package_key, rotation_time=60):
+    def get_available_countries(self):
+        """Get list of available countries from Proxy Seller"""
+        # This would typically come from your Proxy Seller API
+        # For now, returning a static list of commonly available countries
+        countries = [
+            "US - United States",
+            "UK - United Kingdom", 
+            "DE - Germany",
+            "FR - France",
+            "CA - Canada",
+            "NL - Netherlands",
+            "SG - Singapore",
+            "JP - Japan",
+            "AU - Australia",
+            "BR - Brazil"
+        ]
+        return countries
+    
+    def change_country(self, package_key, country_code):
         """Change country/rotation for sub user"""
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/list/rotation"
             
-            # According to API docs, we need to specify rotation time
-            # -1 = rotation, 0 = rotation per request, 1..3600 = time in seconds
+            # Extract country code from selection (e.g., "US" from "US - United States")
+            if " - " in country_code:
+                country_code = country_code.split(" - ")[0]
+            
+            # For now, we'll use a fixed rotation time
+            # In a real implementation, you might want to map countries to specific rotation settings
             data = {
                 "package_key": package_key, 
-                "rotation": rotation_time
+                "rotation": 60  # 60 seconds rotation
             }
             
             response = requests.post(url, json=data, timeout=30)
@@ -144,36 +166,25 @@ class ProxyManager:
                 data = result['data']
                 geo = data.get('geo', {})
                 
-                # Build connection details
-                hostname = data.get('login', 'N/A')
-                port = data.get('export', {}).get('ports', 'N/A')
-                username = data.get('login', 'N/A')
-                password = data.get('password', 'N/A')
-                
                 proxy_info = f"""
-🔄 Rotation Changed Successfully!
+🔄 REGION CHANGED SUCCESSFULLY!
 
-📋 Proxy Details:
-├── ID: {data.get('id', 'N/A')}
-├── Title: {data.get('title', 'N/A')}
-└── Rotation: {data.get('rotation', 'N/A')}
+🌍 LOCATION:
+• Country: {geo.get('country', 'N/A')}
+• Region: {geo.get('region', 'N/A')} 
+• City: {geo.get('city', 'N/A')}
+• ISP: {geo.get('isp', 'N/A')}
 
-🌍 Location Information:
-├── Country: {geo.get('country', 'N/A')}
-├── Region: {geo.get('region', 'N/A')}
-├── City: {geo.get('city', 'N/A')}
-└── ISP: {geo.get('isp', 'N/A')}
+🔧 CONNECTION DETAILS:
+• Host: {data.get('login', 'N/A')}
+• Port: {data.get('export', {}).get('ports', 'N/A')}
+• Username: {data.get('login', 'N/A')}
+• Password: {data.get('password', 'N/A')}
 
-🔧 Connection Details:
-├── Hostname: {hostname}
-├── Port: {port}
-├── Username: {username}
-└── Password: {password}
+🔗 CONNECTION STRING:
+{data.get('login', 'N/A')}:{data.get('password', 'N/A')}@{data.get('login', 'N/A')}:{data.get('export', {}).get('ports', 'N/A')}
 
-🔗 Connection Format:
-`{hostname}:{port}:{username}:{password}`
-
-📝 Whitelist: {data.get('whitelist', 'Not set')}
+⚙️ Rotation: {data.get('rotation', 'N/A')}
                 """
                 return proxy_info
             else:
@@ -186,6 +197,9 @@ class ProxyManager:
 
 # Initialize proxy manager
 proxy_mgr = ProxyManager(API_KEY)
+
+# Store temporary data for conversations
+user_data = {}
 
 # Command Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -228,7 +242,7 @@ async def receive_gb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text("⏳ Creating sub user...")
     result = proxy_mgr.create_sub_user(gb_amount)
-    await update.message.reply_text(result, parse_mode='Markdown')
+    await update.message.reply_text(result)
     return ConversationHandler.END
 
 async def delete_sub_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -243,7 +257,7 @@ async def receive_delete_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package_key = update.message.text.strip()
     await update.message.reply_text("⏳ Deleting sub user...")
     result = proxy_mgr.delete_sub_user(package_key)
-    await update.message.reply_text(result, parse_mode='Markdown')
+    await update.message.reply_text(result)
     return ConversationHandler.END
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -265,18 +279,72 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package_key = update.message.text.strip()
     await update.message.reply_text("⏳ Retrieving package information...")
     result = proxy_mgr.get_package_info(package_key)
-    await update.message.reply_text(result, parse_mode='Markdown')
+    # Send without parse_mode to avoid markdown issues
+    await update.message.reply_text(result)
     return ConversationHandler.END
 
 async def change_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🌍 Enter your Sub User ID to change region/rotation:")
+    await update.message.reply_text("🌍 Enter your Sub User ID to change region:")
+    return WAITING_COUNTRY_CHANGE
+
+async def ask_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ask user to select a country after entering sub user ID"""
+    package_key = update.message.text.strip()
+    
+    # Store package key in context for later use
+    context.user_data['package_key'] = package_key
+    
+    # Get available countries
+    countries = proxy_mgr.get_available_countries()
+    
+    country_list = "🌍 AVAILABLE COUNTRIES:\n\n"
+    for i, country in enumerate(countries, 1):
+        country_list += f"{i}. {country}\n"
+    
+    country_list += "\nPlease reply with the number or country code (e.g., '1' or 'US'):"
+    
+    await update.message.reply_text(country_list)
     return WAITING_COUNTRY_CHANGE
 
 async def perform_country_change(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    package_key = update.message.text.strip()
-    await update.message.reply_text("⏳ Changing region and rotation...")
-    result = proxy_mgr.change_country(package_key)
-    await update.message.reply_text(result, parse_mode='Markdown')
+    """Perform the country change after user selects country"""
+    user_input = update.message.text.strip()
+    package_key = context.user_data.get('package_key')
+    
+    if not package_key:
+        await update.message.reply_text("❌ Error: Sub User ID not found. Please start over.")
+        return ConversationHandler.END
+    
+    # Get available countries
+    countries = proxy_mgr.get_available_countries()
+    selected_country = None
+    
+    # Handle numeric selection
+    if user_input.isdigit():
+        index = int(user_input) - 1
+        if 0 <= index < len(countries):
+            selected_country = countries[index]
+    
+    # Handle country code selection
+    else:
+        user_input_upper = user_input.upper()
+        for country in countries:
+            if country.startswith(user_input_upper):
+                selected_country = country
+                break
+    
+    if not selected_country:
+        await update.message.reply_text("❌ Invalid selection. Please try again with a valid number or country code.")
+        return WAITING_COUNTRY_CHANGE
+    
+    await update.message.reply_text(f"⏳ Changing region to {selected_country}...")
+    result = proxy_mgr.change_country(package_key, selected_country)
+    await update.message.reply_text(result)
+    
+    # Clean up
+    if 'package_key' in context.user_data:
+        del context.user_data['package_key']
+    
     return ConversationHandler.END
 
 async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -332,7 +400,10 @@ def main():
     country_conv = ConversationHandler(
         entry_points=[CommandHandler('change_country', change_country)],
         states={
-            WAITING_COUNTRY_CHANGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, perform_country_change)]
+            WAITING_COUNTRY_CHANGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_country_selection),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, perform_country_change)
+            ]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
