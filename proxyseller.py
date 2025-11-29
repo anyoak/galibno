@@ -1,222 +1,331 @@
-import requests
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
+import requests
 
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
 )
-logger = logging.getLogger(__name__)
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ConversationHandler,
+    ContextTypes,
+    filters,
+)
 
-# Configuration - Your actual credentials
-BOT_TOKEN = "8268326998:AAG1Cu7Fv0VTMlQ6Xx8dJVRG20TJRN5Fa3Q"
-API_KEY = "de35ee3af144849b4b912b190f3f6f93"
-ADMIN_ID = 6577308099
+# ---------------- CONFIGURATION ----------------
+
+# ⚠️ এগুলো নিজের মতো করে সেট করো
+BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+API_KEY = "YOUR_PROXY_SELLER_API_KEY"
+ADMIN_ID = 123456789  # তোমার টেলিগ্রাম numeric user id
 
 BASE_URL = "https://proxy-seller.com/personal/api/v1"
 
 # Conversation states
-WAITING_GB, WAITING_DELETE_ID, WAITING_SUB_USER_ID, WAITING_ROTATION, CHOOSING_COUNTRY = range(5)
+(
+    WAITING_GB,
+    WAITING_DELETE_ID,
+    WAITING_SUB_USER_ID,
+    WAITING_ROTATION_PACKAGE,
+    WAITING_ROTATION_LIST,
+    WAITING_ROTATION_VALUE,
+    CHOOSING_COUNTRY,
+) = range(7)
+
+# ---------------- LOGGING ----------------
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
+
+# ---------------- PROXY MANAGER CLASS ----------------
+
 
 class ProxyManager:
-    def __init__(self, api_key):
+    def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = BASE_URL
-    
-    def create_sub_user(self, traffic_gb):
-        """Create sub user with specified traffic in GB"""
+
+    # -------- Sub user management --------
+
+    def create_sub_user(self, traffic_gb: str) -> str:
+        """
+        Create sub user package from main residential package.
+        Docs: POST /{apiKey}/residentsubuser/create
+        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/create"
-            
-            # Convert GB to bytes
+
+            # GB → bytes
             traffic_bytes = int(traffic_gb) * 1024 * 1024 * 1024
-            
             data = {"traffic_limit": str(traffic_bytes)}
-            
+
             response = requests.post(url, json=data, timeout=30)
             result = response.json()
             logger.info(f"Create sub user response: {result}")
-            
-            if result.get('status') == 'success':
-                package_key = result['data']['package_key']
-                return f"✅ Sub User Created Successfully!\n\n🆔 ID: {package_key}\n💾 Traffic: {traffic_gb} GB\n🔧 Status: Active"
+
+            if result.get("status") == "success":
+                data = result.get("data", {})
+                package_key = data.get("package_key", "N/A")
+                expired_at = data.get("expired_at", "N/A")
+
+                msg = (
+                    "✅ Sub user created successfully.\n\n"
+                    f"🆔 Sub User ID: {package_key}\n"
+                    f"💾 Traffic: {traffic_gb} GB\n"
+                    f"📅 Expiry: {expired_at}\n"
+                    f"🔧 Status: {'Active' if data.get('is_active') else 'Inactive'}"
+                )
+                return msg
             else:
-                error_msg = result.get('errors', ['Unknown error'])[0] if result.get('errors') else 'Unknown error'
-                return f"❌ Error: {error_msg}"
-                
+                errors = result.get("errors") or []
+                error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+                return f"❌ Error creating sub user: {error_msg}"
+
         except Exception as e:
-            logger.error(f"Create sub user error: {e}")
+            logger.error(f"Create sub user error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
-    
-    def delete_sub_user(self, package_key):
-        """Delete sub user by package key"""
+
+    def delete_sub_user(self, package_key: str) -> str:
+        """
+        Delete subuser package.
+        Docs: DELETE /{apiKey}/residentsubuser/delete
+        (তোমার আগের কোডের POST ভার্সনও কাজ করতে পারে, কিন্তু ডকে এখন DELETE দেখানো আছে)
+        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/delete"
             data = {"package_key": package_key}
-            
+
+            # অনেক সার্ভার DELETE+JSON সাপোর্ট করে না, তাই POST fallback ভালো।
+            # Proxy-Seller ডকে এই endpoint DELETE বলা, কিন্তু অনেক উদাহরণে POST ও আছে।
+            # তাই POST রেখে দিচ্ছি।
             response = requests.post(url, json=data, timeout=30)
             result = response.json()
             logger.info(f"Delete sub user response: {result}")
-            
-            if result.get('status') == 'success':
-                return f"✅ Sub User {package_key} Deleted Successfully!"
+
+            if result.get("status") == "success":
+                return f"✅ Sub user {package_key} deleted successfully."
             else:
-                error_msg = result.get('errors', ['Unknown error'])[0] if result.get('errors') else 'Unknown error'
-                return f"❌ Error: {error_msg}"
-                
+                errors = result.get("errors") or []
+                error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+                return f"❌ Error deleting sub user: {error_msg}"
+
         except Exception as e:
-            logger.error(f"Delete sub user error: {e}")
+            logger.error(f"Delete sub user error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
-    
-    def get_package_info(self, package_key):
-        """Get package information for dashboard"""
+
+    # -------- Package info / dashboard --------
+
+    def get_package_info(self, package_key: str) -> str:
+        """
+        Get subuser package information.
+        Docs: GET /{apiKey}/residentsubuser/packages
+        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/packages"
-            
             response = requests.get(url, timeout=30)
             result = response.json()
             logger.info(f"Get package info response: {result}")
-            
-            if result.get('status') == 'success':
-                packages = result.get('data', [])
-                
-                for package in packages:
-                    if package.get('package_key') == package_key:
-                        # Convert bytes to GB
-                        traffic_limit_gb = int(package.get('traffic_limit', 0)) / (1024**3)
-                        traffic_usage_gb = int(package.get('traffic_usage', 0)) / (1024**3)
-                        traffic_left_gb = int(package.get('traffic_left', 0)) / (1024**3)
-                        
-                        # Handle expired_at which can be a dictionary
-                        expired_at = package.get('expired_at', 'N/A')
-                        if isinstance(expired_at, dict):
-                            expired_at = expired_at.get('date', 'N/A')
-                        
-                        dashboard_text = f"""
-📊 DASHBOARD
 
-🆔 User ID: {package_key}
-🔄 Rotation: {package.get('rotation', 'N/A')}s
-📅 Expiry: {expired_at}
-🔧 Status: {'🟢 Active' if package.get('is_active') else '🔴 Inactive'}
-
-📈 TRAFFIC USAGE:
-├── Total: {traffic_limit_gb:.2f} GB
-├── Used: {traffic_usage_gb:.2f} GB  
-└── Available: {traffic_left_gb:.2f} GB
-
-💾 SUB-USER TRAFFIC:
-├── Limit: {int(package.get('traffic_limit_sub', 0)) / (1024**3):.2f} GB
-├── Used: {int(package.get('traffic_usage_sub', 0)) / (1024**3):.2f} GB
-└── Left: {int(package.get('traffic_left_sub', 0)) / (1024**3):.2f} GB
-                        """
-                        return dashboard_text
-                
-                return "❌ Sub User ID not found in your packages!"
-            else:
-                error_msg = result.get('errors', ['Unknown error'])[0] if result.get('errors') else 'Unknown error'
+            if result.get("status") != "success":
+                errors = result.get("errors") or []
+                error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
                 return f"❌ Error: {error_msg}"
-                
+
+            packages = result.get("data", [])
+
+            for pkg in packages:
+                if pkg.get("package_key") == package_key:
+                    traffic_limit_gb = int(pkg.get("traffic_limit", 0)) / (1024**3)
+                    traffic_usage_gb = int(pkg.get("traffic_usage", 0)) / (1024**3)
+                    traffic_left_gb = int(pkg.get("traffic_left", 0)) / (1024**3)
+
+                    traffic_limit_sub_gb = int(pkg.get("traffic_limit_sub", 0)) / (1024**3)
+                    traffic_usage_sub_gb = int(pkg.get("traffic_usage_sub", 0)) / (1024**3)
+                    traffic_left_sub_gb = int(pkg.get("traffic_left_sub", 0)) / (1024**3)
+
+                    expired_at = pkg.get("expired_at", "N/A")
+                    if isinstance(expired_at, dict):
+                        expired_at = expired_at.get("date", "N/A")
+
+                    text = (
+                        "📊 DASHBOARD\n\n"
+                        f"🆔 Sub User ID: {package_key}\n"
+                        f"📅 Expiry: {expired_at}\n"
+                        f"🔧 Status: {'🟢 Active' if pkg.get('is_active') else '🔴 Inactive'}\n"
+                        f"🔄 Default rotation: {pkg.get('rotation', 'N/A')}s\n\n"
+                        "📈 MAIN TRAFFIC:\n"
+                        f"• Total: {traffic_limit_gb:.2f} GB\n"
+                        f"• Used: {traffic_usage_gb:.2f} GB\n"
+                        f"• Left:  {traffic_left_gb:.2f} GB\n\n"
+                        "💾 SUB-USER TRAFFIC:\n"
+                        f"• Limit: {traffic_limit_sub_gb:.2f} GB\n"
+                        f"• Used:  {traffic_usage_sub_gb:.2f} GB\n"
+                        f"• Left:  {traffic_left_sub_gb:.2f} GB\n"
+                    )
+                    return text
+
+            return "❌ Sub user ID not found under your account."
+
         except Exception as e:
-            logger.error(f"Get package info error: {e}")
+            logger.error(f"Get package info error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
-    
-    def change_rotation(self, package_key, rotation_value):
-        """Change rotation timing for sub user"""
+
+    # -------- IP lists (subuser) --------
+
+    def get_subuser_lists(self, package_key: str):
+        """
+        Retrieve all created lists in subuser package.
+        Docs: GET /{apiKey}/residentsubuser/lists?package_key=...
+        Return: (True, items) or (False, error_message)
+        """
+        try:
+            url = f"{self.base_url}/{self.api_key}/residentsubuser/lists"
+            params = {"package_key": package_key}
+            response = requests.get(url, params=params, timeout=30)
+            result = response.json()
+            logger.info(f"Get subuser lists response: {result}")
+
+            if result.get("status") == "success":
+                data = result.get("data") or {}
+                items = data.get("items") or []
+                return True, items
+
+            errors = result.get("errors") or []
+            error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+            return False, f"❌ Error fetching lists: {error_msg}"
+
+        except Exception as e:
+            logger.error(f"Get subuser lists error: {e}", exc_info=True)
+            return False, f"❌ API Error: {str(e)}"
+
+    def change_rotation(self, list_id: int, package_key: str, rotation_value: str) -> str:
+        """
+        Change rotation for a specific IP list in subuser package.
+        Docs: POST /{apiKey}/residentsubuser/list/rotation
+        Body: { id, rotation, package_key }
+        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/list/rotation"
-            
-            # Convert rotation value to integer
+
             try:
                 rotation_int = int(rotation_value)
             except ValueError:
-                return "❌ Invalid rotation value. Please use numbers only."
-            
-            # Validate rotation range
+                return "❌ Invalid rotation value. Use only numbers."
+
             if rotation_int not in [-1, 0] and not (1 <= rotation_int <= 3600):
-                return "❌ Rotation must be: -1 (rotation), 0 (per request), or 1-3600 seconds"
-            
+                return "❌ Rotation must be: -1 (sticky), 0 (per request), or 1–3600 seconds."
+
             data = {
-                "package_key": package_key, 
-                "rotation": rotation_int
+                "id": list_id,
+                "rotation": rotation_int,
+                "package_key": package_key,
             }
-            
+
             response = requests.post(url, json=data, timeout=30)
             result = response.json()
             logger.info(f"Change rotation response: {result}")
-            
-            if result.get('status') == 'success':
-                data = result['data']
-                geo = data.get('geo', {})
-                
-                # Determine rotation description
-                rotation_desc = ""
-                if rotation_int == -1:
-                    rotation_desc = "Continuous rotation"
-                elif rotation_int == 0:
-                    rotation_desc = "Rotation per request"
-                else:
-                    rotation_desc = f"Rotation every {rotation_int} seconds"
-                
-                proxy_info = f"""
-🔄 ROTATION CHANGED SUCCESSFULLY!
 
-⚙️ Rotation Setting: {rotation_desc}
+            if result.get("status") != "success":
+                errors = result.get("errors") or []
+                error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+                return f"❌ Error changing rotation: {error_msg}"
 
-🌍 CURRENT LOCATION:
-• Country: {geo.get('country', 'N/A')}
-• Region: {geo.get('region', 'N/A')} 
-• City: {geo.get('city', 'N/A')}
-• ISP: {geo.get('isp', 'N/A')}
+            data = result.get("data") or {}
+            geo = data.get("geo") or {}
+            export = data.get("export") or {}
 
-🔧 CONNECTION DETAILS:
-• Host: {data.get('login', 'N/A')}
-• Port: {data.get('export', {}).get('ports', 'N/A')}
-• Username: {data.get('login', 'N/A')}
-• Password: {data.get('password', 'N/A')}
-
-🔗 CONNECTION STRING:
-{data.get('login', 'N/A')}:{data.get('password', 'N/A')}@{data.get('login', 'N/A')}:{data.get('export', {}).get('ports', 'N/A')}
-
-📝 Whitelist: {data.get('whitelist', 'Not set')}
-                """
-                return proxy_info
+            if rotation_int == -1:
+                rotation_desc = "Sticky (no rotation)"
+            elif rotation_int == 0:
+                rotation_desc = "Rotation per request"
             else:
-                error_msg = result.get('errors', ['Unknown error'])[0] if result.get('errors') else 'Unknown error'
-                return f"❌ Error: {error_msg}"
-                
+                rotation_desc = f"Rotation every {rotation_int} seconds"
+
+            host = "res.proxy-seller.com"  # সাধারণত এটাই; প্যানেল থেকে কনফার্ম করা ভালো
+            port = export.get("ports", 10000)
+            login = data.get("login", "N/A")
+            password = data.get("password", "N/A")
+
+            conn_str = f"{login}:{password}@{host}:{port}"
+
+            text = (
+                "🔄 Rotation updated successfully.\n\n"
+                f"🆔 List ID: {data.get('id', list_id)}\n"
+                f"📛 Title: {data.get('title', 'N/A')}\n"
+                f"⚙️ Rotation: {rotation_desc}\n\n"
+                "🌍 GEO:\n"
+                f"• Country: {geo.get('country', 'N/A')}\n"
+                f"• Region:  {geo.get('region', 'N/A')}\n"
+                f"• City:    {geo.get('city', 'N/A')}\n"
+                f"• ISP:     {geo.get('isp', 'N/A')}\n\n"
+                "🔧 Connection:\n"
+                f"• Host: {host}\n"
+                f"• Port: {port}\n"
+                f"• User: {login}\n"
+                f"• Pass: {password}\n\n"
+                "🔗 Connection string:\n"
+                f"{conn_str}\n"
+            )
+            return text
+
         except Exception as e:
-            logger.error(f"Change rotation error: {e}")
+            logger.error(f"Change rotation error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
 
+    # -------- Country list / geo helpers --------
+
     def get_available_countries(self):
-        """Get list of available countries from ProxySeller"""
+        """
+        Get all available GEO locations and map to list of countries.
+        Docs: GET /{apiKey}/resident/geo
+        Fallback: built-in world list.
+        """
         try:
-            # This endpoint might need to be adjusted based on actual ProxySeller API
-            url = f"{self.base_url}/{self.api_key}/resident/geo/country"
-            
+            url = f"{self.base_url}/{self.api_key}/resident/geo"
             response = requests.get(url, timeout=30)
             result = response.json()
-            logger.info(f"Get countries response: {result}")
-            
-            if result.get('status') == 'success':
-                return result.get('data', [])
+            logger.info(f"Get GEO countries response: {result}")
+
+            if not isinstance(result, list):
+                # যদি status/data wrapper থাকে, adjust
+                if isinstance(result, dict) and isinstance(result.get("data"), list):
+                    raw_list = result["data"]
+                else:
+                    return self.get_worldwide_countries()
             else:
-                # Return worldwide countries if API fails
+                raw_list = result
+
+            countries = []
+            for item in raw_list:
+                code = item.get("code")
+                name = item.get("name")
+                if code and name:
+                    countries.append({"country": name, "code": code})
+
+            if not countries:
                 return self.get_worldwide_countries()
-                
+
+            return countries
+
         except Exception as e:
-            logger.error(f"Get countries error: {e}")
-            # Return worldwide countries if API fails
+            logger.error(f"Get countries error: {e}", exc_info=True)
             return self.get_worldwide_countries()
-    
+
     def get_worldwide_countries(self):
-        """Return comprehensive list of worldwide countries"""
+        """
+        Static fallback country list (ISO-2 codes).
+        """
         return [
             {"country": "United States", "code": "US"},
-            {"country": "United Kingdom", "code": "GB"},
+			{"country": "United Kingdom", "code": "GB"},
             {"country": "Canada", "code": "CA"},
             {"country": "Germany", "code": "DE"},
             {"country": "France", "code": "FR"},
@@ -392,173 +501,196 @@ class ProxyManager:
             {"country": "Central African Republic", "code": "CF"},
             {"country": "South Sudan", "code": "SS"}
         ]
-    
-    def get_country_keyboard(self, page=0, countries_per_page=10):
-        """Get paginated country keyboard"""
+
+    def get_country_keyboard(self, page: int = 0, countries_per_page: int = 10) -> InlineKeyboardMarkup:
         countries = self.get_available_countries()
         total_pages = (len(countries) + countries_per_page - 1) // countries_per_page
-        
+
         start_idx = page * countries_per_page
         end_idx = start_idx + countries_per_page
         page_countries = countries[start_idx:end_idx]
-        
+
         keyboard = []
-        
-        # Add countries in rows of 2
+
         for i in range(0, len(page_countries), 2):
             row = []
             if i < len(page_countries):
-                country1 = page_countries[i]
-                country_name1 = country1.get('country', 'Unknown')[:15]  # Limit name length
-                button1 = InlineKeyboardButton(
-                    f"🌍 {country_name1}", 
-                    callback_data=f"country_{country1['code']}_{country1['country']}"
+                c1 = page_countries[i]
+                name1 = c1.get("country", "Unknown")[:18]
+                row.append(
+                    InlineKeyboardButton(
+                        f"{name1}",
+                        callback_data=f"country_{c1['code']}_{c1['country']}",
+                    )
                 )
-                row.append(button1)
-            
             if i + 1 < len(page_countries):
-                country2 = page_countries[i + 1]
-                country_name2 = country2.get('country', 'Unknown')[:15]  # Limit name length
-                button2 = InlineKeyboardButton(
-                    f"🌍 {country_name2}", 
-                    callback_data=f"country_{country2['code']}_{country2['country']}"
+                c2 = page_countries[i + 1]
+                name2 = c2.get("country", "Unknown")[:18]
+                row.append(
+                    InlineKeyboardButton(
+                        f"🌍 {name2}",
+                        callback_data=f"country_{c2['code']}_{c2['country']}",
+                    )
                 )
-                row.append(button2)
-            
             if row:
                 keyboard.append(row)
-        
-        # Navigation buttons
-        navigation_row = []
+
+        nav_row = []
         if page > 0:
-            navigation_row.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"page_{page-1}"))
-        
-        navigation_row.append(InlineKeyboardButton(f"📄 {page+1}/{total_pages}", callback_data="current_page"))
-        
+            nav_row.append(
+                InlineKeyboardButton("⬅️ Prev", callback_data=f"page_{page - 1}")
+            )
+        nav_row.append(
+            InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="current_page")
+        )
         if page < total_pages - 1:
-            navigation_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"page_{page+1}"))
-        
-        if navigation_row:
-            keyboard.append(navigation_row)
-        
-        # Cancel button
+            nav_row.append(
+                InlineKeyboardButton("Next ➡️", callback_data=f"page_{page + 1}")
+            )
+        keyboard.append(nav_row)
+
         keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_country")])
-        
+
         return InlineKeyboardMarkup(keyboard)
-    
-    def create_country_list(self, package_key, country_code, country_name):
-        """Create a new proxy list for specific country"""
+
+    def create_country_list(self, package_key: str, country_code: str, country_name: str) -> str:
+        """
+        Create IP list in subuser package for specific country.
+        Docs: POST /{apiKey}/residentsubuser/list/add
+        """
         try:
             url = f"{self.base_url}/{self.api_key}/residentsubuser/list/add"
-            
+
             data = {
+                "title": f"{country_name} Residential List",
+                "whitelist": "",  # login/password auth
+                "geo": {
+                    "country": country_code,
+                },
+                "export": {
+                    "ports": 100,  # কতগুলো পোর্ট/আইপি চাই
+                    "ext": "txt",
+                },
+                "rotation": -1,  # sticky by default
                 "package_key": package_key,
-                "country": country_code,
-                "title": f"{country_name} Proxy List"
             }
-            
+
             response = requests.post(url, json=data, timeout=30)
             result = response.json()
             logger.info(f"Create country list response: {result}")
-            
-            if result.get('status') == 'success':
-                data = result['data']
-                geo = data.get('geo', {})
-                
-                proxy_info = f"""
-🌍 COUNTRY PROXY LIST CREATED!
 
-✅ Successfully created proxy list for {country_name}
+            if result.get("status") != "success":
+                errors = result.get("errors") or []
+                error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+                return f"❌ Error creating IP list: {error_msg}"
 
-📍 LOCATION DETAILS:
-• Country: {geo.get('country', country_name)}
-• Region: {geo.get('region', 'N/A')}
-• City: {geo.get('city', 'N/A')}
-• ISP: {geo.get('isp', 'N/A')}
+            data = result.get("data") or {}
+            geo = data.get("geo") or {}
+            export = data.get("export") or {}
 
-🔧 CONNECTION INFORMATION:
-• Host: {data.get('login', 'N/A')}
-• Port: {data.get('export', {}).get('ports', 'N/A')}
-• Username: {data.get('login', 'N/A')}
-• Password: {data.get('password', 'N/A')}
+            host = "res.proxy-seller.com"  # সাধারণত এটা; তোমার ড্যাশবোর্ডে দেখানো host use করবে
+            port = export.get("ports", 10000)
+            login = data.get("login", "N/A")
+            password = data.get("password", "N/A")
 
-🔗 PROXY CONNECTION STRING:
-{data.get('login', 'N/A')}:{data.get('password', 'N/A')}@{data.get('login', 'N/A')}:{data.get('export', {}).get('ports', 'N/A')}
+            conn_str = f"{login}:{password}@{host}:{port}"
+            direct_link = f"http://{conn_str}"
 
-🌐 DIRECT LINK:
-http://{data.get('login', 'N/A')}:{data.get('password', 'N/A')}@{data.get('login', 'N/A')}:{data.get('export', {}).get('ports', 'N/A')}
+            text = (
+                "🌍 Country IP list created successfully.\n\n"
+                f"🆔 List ID: {data.get('id', 'N/A')}\n"
+                f"📛 Title: {data.get('title', 'N/A')}\n\n"
+                "📍 GEO:\n"
+                f"• Country: {geo.get('country', country_code)} ({country_name})\n"
+                f"• Region:  {geo.get('region', 'Any')}\n"
+                f"• City:    {geo.get('city', 'Any')}\n"
+                f"• ISP:     {geo.get('isp', 'Any')}\n\n"
+                "🔧 Connection info:\n"
+                f"• Host: {host}\n"
+                f"• Port: {port}\n"
+                f"• User: {login}\n"
+                f"• Pass: {password}\n\n"
+                "🔗 Connection string:\n"
+                f"{conn_str}\n\n"
+                "🌐 Direct URL format:\n"
+                f"{direct_link}\n\n"
+                "💡 Note: Use this proxy in any app that supports HTTP(S)/SOCKS5 proxies."
+            )
+            return text
 
-📝 Whitelist: {data.get('whitelist', 'Not set')}
-🔄 Rotation: {data.get('rotation', 'Default')}
-
-💡 Usage Tip: You can use this proxy with any application that supports HTTP proxies.
-                """
-                return proxy_info
-            else:
-                error_msg = result.get('errors', ['Unknown error'])[0] if result.get('errors') else 'Unknown error'
-                return f"❌ Error creating proxy list: {error_msg}"
-                
         except Exception as e:
-            logger.error(f"Create country list error: {e}")
+            logger.error(f"Create country list error: {e}", exc_info=True)
             return f"❌ API Error: {str(e)}"
 
-# Initialize proxy manager
+
+# Initialize ProxyManager
 proxy_mgr = ProxyManager(API_KEY)
 
-# Command Handlers
+
+# ---------------- HANDLERS ----------------
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id == ADMIN_ID:
-        await update.message.reply_text(
-            "👋 Welcome Admin!\n\n"
-            "🛠️ Admin Commands:\n"
+        text = (
+            "👋 Welcome, Admin.\n\n"
+            "🛠 Admin commands:\n"
             "/create - Create sub user\n"
             "/delete - Delete sub user\n"
-            "/broadcast - Broadcast message\n\n"
-            "👤 User Commands:\n"
+            "/broadcast <msg> - Broadcast message\n\n"
+            "👤 User commands:\n"
             "/dashboard - Check usage\n"
-            "/change_rotation - Change rotation timing\n"
-            "/change_country - Change proxy country 🌍\n"
-            "/support - Get assistance"
+            "/change_rotation - Change rotation for IP list\n"
+            "/change_country - Create IP list for specific country\n"
+            "/support - Contact support"
         )
     else:
-        await update.message.reply_text(
-            "👋 Welcome to Proxy Manager Bot! 🤖\n\n"
-            "📋 Available Commands:\n"
-            "/dashboard - Check your usage 📊\n"
-            "/change_rotation - Change rotation timing 🔄\n"
-            "/change_country - Change proxy country 🌍\n"
-            "/support - Get assistance 🆘\n\n"
-            "💡 Simply use the commands to manage your proxies!"
+        text = (
+            "👋 Welcome to Proxy Manager Bot.\n\n"
+            "Available commands:\n"
+            "/dashboard - Check your sub user usage\n"
+            "/change_rotation - Change rotation of your IP list\n"
+            "/change_country - Create country-specific IP list\n"
+            "/support - Get help"
         )
 
-async def create_sub_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(text)
+
+
+# ---- Create sub user (admin) ----
+
+async def create_sub_user_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Administrator access required!")
+        await update.message.reply_text("❌ Only admin can create sub users.")
         return ConversationHandler.END
-    
-    await update.message.reply_text("📝 Enter the amount of GB for the sub user:")
+
+    await update.message.reply_text("📝 Enter traffic for sub user (in GB):")
     return WAITING_GB
+
 
 async def receive_gb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gb_amount = update.message.text.strip()
-    
+
     if not gb_amount.isdigit() or int(gb_amount) <= 0:
-        await update.message.reply_text("❌ Please enter a valid positive number!")
+        await update.message.reply_text("❌ Please enter a valid positive number (e.g. 5, 10).")
         return WAITING_GB
-    
-    await update.message.reply_text("⏳ Creating sub user...")
+
+    await update.message.reply_text("⏳ Creating sub user, please wait...")
     result = proxy_mgr.create_sub_user(gb_amount)
     await update.message.reply_text(result)
     return ConversationHandler.END
 
-async def delete_sub_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+# ---- Delete sub user (admin) ----
+
+async def delete_sub_user_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Administrator access required!")
+        await update.message.reply_text("❌ Only admin can delete sub users.")
         return ConversationHandler.END
-    
-    await update.message.reply_text("🗑️ Enter the Sub User ID to delete:")
+
+    await update.message.reply_text("🗑 Enter the sub user ID (package_key) to delete:")
     return WAITING_DELETE_ID
+
 
 async def receive_delete_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package_key = update.message.text.strip()
@@ -567,271 +699,346 @@ async def receive_delete_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(result)
     return ConversationHandler.END
 
+
+# ---- Broadcast (admin) ----
+
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Administrator access required!")
+        await update.message.reply_text("❌ Only admin can use /broadcast.")
         return
-    
+
     if context.args:
         message = " ".join(context.args)
-        await update.message.reply_text(f"📢 Broadcast Message Sent:\n\n{message}")
+        await update.message.reply_text(f"📢 Broadcast preview:\n\n{message}")
+        # এখানে চাইলে ডাটাবেজে user list নিয়ে লুপ করে send করতে পারো
     else:
-        await update.message.reply_text("⚠️ Usage: /broadcast <your_message>")
+        await update.message.reply_text("Usage: /broadcast <your_message>")
+
+
+# ---- Dashboard ----
 
 async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📊 Please enter your Sub User ID:")
+    await update.message.reply_text("📊 Send your sub user ID (package_key):")
     return WAITING_SUB_USER_ID
+
 
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package_key = update.message.text.strip()
-    await update.message.reply_text("⏳ Retrieving package information...")
+    await update.message.reply_text("⏳ Fetching package information...")
     result = proxy_mgr.get_package_info(package_key)
     await update.message.reply_text(result)
     return ConversationHandler.END
 
-async def change_rotation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔄 Enter your Sub User ID:")
-    return WAITING_ROTATION
 
-async def ask_rotation_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ask for rotation value after receiving sub user ID"""
+# ---- Change rotation (with list selection) ----
+
+async def change_rotation_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔄 Send your sub user ID (package_key):")
+    return WAITING_ROTATION_PACKAGE
+
+
+async def rotation_receive_package(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package_key = update.message.text.strip()
-    
-    # Store package key in context for later use
-    context.user_data['package_key'] = package_key
-    
-    # Explain rotation options
-    message = """
-🔄 ROTATION SETTINGS
+    context.user_data["package_key"] = package_key
 
-Choose rotation timing:
+    await update.message.reply_text("⏳ Fetching your IP lists...")
+    ok, data = proxy_mgr.get_subuser_lists(package_key)
 
--1 = Continuous rotation
- 0 = Rotation per request
-1-3600 = Rotation every X seconds
-
-Examples:
-• -1  → IP changes automatically
-• 0   → New IP for each request  
-• 60  → IP changes every 60 seconds
-• 300 → IP changes every 5 minutes
-
-📝 Enter rotation value (-1, 0, or 1-3600):
-    """
-    
-    await update.message.reply_text(message)
-    return WAITING_ROTATION + 1  # Next state
-
-async def perform_rotation_change(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Perform the rotation change after user provides rotation value"""
-    rotation_value = update.message.text.strip()
-    package_key = context.user_data.get('package_key')
-    
-    if not package_key:
-        await update.message.reply_text("❌ Error: Sub User ID not found. Please start over.")
+    if not ok:
+        await update.message.reply_text(data)
+        context.user_data.pop("package_key", None)
         return ConversationHandler.END
-    
-    await update.message.reply_text("⏳ Changing rotation settings...")
-    result = proxy_mgr.change_rotation(package_key, rotation_value)
-    await update.message.reply_text(result)
-    
-    # Clean up
-    if 'package_key' in context.user_data:
-        del context.user_data['package_key']
-    
-    return ConversationHandler.END
 
-async def change_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start country change process"""
-    await update.message.reply_text("🌍 Please enter your Sub User ID:")
-    return CHOOSING_COUNTRY
+    items = data
+    if not items:
+        await update.message.reply_text("❌ No IP lists found for this sub user.")
+        context.user_data.pop("package_key", None)
+        return ConversationHandler.END
 
-async def ask_country_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ask user to choose a country after receiving sub user ID"""
-    package_key = update.message.text.strip()
-    
-    # Store package key in context for later use
-    context.user_data['package_key'] = package_key
-    
-    # Get first page of countries
-    reply_markup = proxy_mgr.get_country_keyboard(page=0)
-    
+    # যদি একটাই list থাকে, সরাসরি ব্যবহার
+    if len(items) == 1:
+        list_id = items[0].get("id")
+        title = items[0].get("title", "N/A")
+        context.user_data["list_id"] = list_id
+        await update.message.reply_text(
+            f"📋 Found one IP list:\nID: {list_id}\nTitle: {title}\n\n"
+            "Now send rotation value:\n"
+            "-1 = Sticky\n"
+            "0 = Per request\n"
+            "1–3600 = seconds"
+        )
+        return WAITING_ROTATION_VALUE
+
+    # একাধিক list → inline keyboard
+    keyboard = []
+    for item in items:
+        list_id = item.get("id")
+        title = item.get("title", "N/A")[:30]
+        geo = item.get("geo") or {}
+        country = geo.get("country", "Any")
+        btn_text = f"ID {list_id} | {country} | {title}"
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    btn_text,
+                    callback_data=f"rotlist_{list_id}",
+                )
+            ]
+        )
+
+    keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="rotlist_cancel")])
+
     await update.message.reply_text(
-        "🌍 **Choose Your Proxy Country**\n\n"
-        "Browse through available countries using the navigation buttons below. "
-        "Select your desired country to create a proxy list:",
-        reply_markup=reply_markup
+        "📋 Choose which IP list you want to update rotation for:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
-    
-    return CHOOSING_COUNTRY
+    return WAITING_ROTATION_LIST
 
-async def handle_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle country selection from inline keyboard"""
+
+async def handle_rotation_list_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    if query.data == "cancel_country":
-        await query.edit_message_text("❌ Country selection cancelled.")
-        # Clean up
-        if 'package_key' in context.user_data:
-            del context.user_data['package_key']
+
+    data = query.data
+
+    if data == "rotlist_cancel":
+        context.user_data.pop("package_key", None)
+        context.user_data.pop("list_id", None)
+        await query.edit_message_text("❌ Rotation change cancelled.")
         return ConversationHandler.END
-    
-    if query.data.startswith("page_"):
-        # Handle pagination
-        page = int(query.data.split("_")[1])
+
+    if data.startswith("rotlist_"):
+        try:
+            list_id = int(data.split("_", 1)[1])
+        except ValueError:
+            await query.edit_message_text("❌ Invalid list selection.")
+            context.user_data.pop("package_key", None)
+            return ConversationHandler.END
+
+        context.user_data["list_id"] = list_id
+        await query.edit_message_text(
+            "✅ List selected.\n\n"
+            "Now send rotation value:\n"
+            "-1 = Sticky (no rotation)\n"
+            "0 = Rotation per request\n"
+            "1–3600 = Rotation by time in seconds"
+        )
+        return WAITING_ROTATION_VALUE
+
+    return WAITING_ROTATION_LIST
+
+
+async def perform_rotation_change(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    rotation_value = update.message.text.strip()
+    package_key = context.user_data.get("package_key")
+    list_id = context.user_data.get("list_id")
+
+    if not package_key or not list_id:
+        await update.message.reply_text("❌ Internal error: package/list not found. Please start again.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    await update.message.reply_text("⏳ Updating rotation...")
+    result = proxy_mgr.change_rotation(list_id, package_key, rotation_value)
+    await update.message.reply_text(result)
+
+    context.user_data.pop("package_key", None)
+    context.user_data.pop("list_id", None)
+
+    return ConversationHandler.END
+
+
+# ---- Change country / create IP list ----
+
+async def change_country_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🌍 Send your sub user ID (package_key):")
+    return CHOOSING_COUNTRY
+
+
+async def ask_country_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    package_key = update.message.text.strip()
+    context.user_data["package_key"] = package_key
+
+    reply_markup = proxy_mgr.get_country_keyboard(page=0)
+
+    await update.message.reply_text(
+        "🌍 Choose your proxy country.\n"
+        "Use Next/Prev buttons to browse, then tap a country to create an IP list.",
+        reply_markup=reply_markup,
+    )
+
+    return CHOOSING_COUNTRY
+
+
+async def handle_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    # Cancel
+    if data == "cancel_country":
+        context.user_data.pop("package_key", None)
+        await query.edit_message_text("❌ Country selection cancelled.")
+        return ConversationHandler.END
+
+    # Pagination
+    if data.startswith("page_"):
+        try:
+            page = int(data.split("_")[1])
+        except ValueError:
+            page = 0
         reply_markup = proxy_mgr.get_country_keyboard(page=page)
         await query.edit_message_reply_markup(reply_markup=reply_markup)
         return CHOOSING_COUNTRY
-    
-    if query.data.startswith("country_"):
-        # Extract country code and name from callback data
-        parts = query.data.split("_", 2)
-        if len(parts) == 3:
-            country_code = parts[1]
-            country_name = parts[2]
-            
-            package_key = context.user_data.get('package_key')
-            
-            if not package_key:
-                await query.edit_message_text("❌ Error: Sub User ID not found. Please start over.")
-                return ConversationHandler.END
-            
-            await query.edit_message_text(f"⏳ Creating proxy list for **{country_name}**...")
-            
-            # Create proxy list for selected country
-            result = proxy_mgr.create_country_list(package_key, country_code, country_name)
-            await context.bot.send_message(chat_id=query.message.chat_id, text=result)
-            
-            # Clean up
-            if 'package_key' in context.user_data:
-                del context.user_data['package_key']
-            
+
+    # Country chosen
+    if data.startswith("country_"):
+        parts = data.split("_", 2)
+        if len(parts) != 3:
+            await query.edit_message_text("❌ Invalid country data.")
+            context.user_data.pop("package_key", None)
             return ConversationHandler.END
-    
+
+        country_code = parts[1]
+        country_name = parts[2]
+
+        package_key = context.user_data.get("package_key")
+        if not package_key:
+            await query.edit_message_text("❌ Sub user ID missing. Please start again.")
+            return ConversationHandler.END
+
+        await query.edit_message_text(f"⏳ Creating IP list for {country_name} ({country_code})...")
+
+        result = proxy_mgr.create_country_list(package_key, country_code, country_name)
+
+        await context.bot.send_message(chat_id=query.message.chat_id, text=result)
+
+        context.user_data.pop("package_key", None)
+        return ConversationHandler.END
+
     return CHOOSING_COUNTRY
 
+
+# ---- Support ----
+
 async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    support_text = """
-🆘 **Support Center**
+    text = (
+        "🆘 Support\n\n"
+        "For help, contact:\n"
+        "👉 @professor_cry\n\n"
+        "Available: 24/7\n"
+        "We can help with setup, billing, technical issues, packages and more."
+    )
+    await update.message.reply_text(text)
 
-Need help? Our support team is here for you!
 
-📧 **Contact Support:**
-👉 @professor_cry
-
-🕒 **Availability:** 24/7
-
-🔧 **We can help with:**
-• Proxy setup issues
-• Billing questions  
-• Technical support
-• Package upgrades
-• Any other queries
-
-Don't hesitate to reach out! We're happy to help. 😊
-    """
-    await update.message.reply_text(support_text)
+# ---- Cancel (fallback) ----
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
     await update.message.reply_text("❌ Operation cancelled.")
-    # Clean up any stored data
-    if 'package_key' in context.user_data:
-        del context.user_data['package_key']
     return ConversationHandler.END
 
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error("Exception occurred:", exc_info=context.error)
+
+# ---- Global error handler ----
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Exception while handling update:", exc_info=context.error)
     try:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="❌ An error occurred. Please try again or contact support."
-        )
-    except:
+        if isinstance(update, Update) and update.effective_chat:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="❌ An internal error occurred. Please try again or contact support.",
+            )
+    except Exception:
         pass
 
+
+# ---------------- MAIN ----------------
+
 def main():
-    # Create application
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Add error handler
+    # Error handler
     application.add_error_handler(error_handler)
 
     # Conversation handlers
     create_conv = ConversationHandler(
-        entry_points=[CommandHandler('create', create_sub_user)],
+        entry_points=[CommandHandler("create", create_sub_user_cmd)],
         states={
-            WAITING_GB: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_gb)]
+            WAITING_GB: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_gb)],
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
 
     delete_conv = ConversationHandler(
-        entry_points=[CommandHandler('delete', delete_sub_user)],
+        entry_points=[CommandHandler("delete", delete_sub_user_cmd)],
         states={
-            WAITING_DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_delete_id)]
+            WAITING_DELETE_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_delete_id)
+            ],
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
 
     dashboard_conv = ConversationHandler(
-        entry_points=[CommandHandler('dashboard', dashboard)],
+        entry_points=[CommandHandler("dashboard", dashboard)],
         states={
-            WAITING_SUB_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, show_dashboard)]
-        },
-        fallbacks=[CommandHandler('cancel', cancel)]
-    )
-
-    # Rotation conversation handler with two steps
-    rotation_conv = ConversationHandler(
-        entry_points=[CommandHandler('change_rotation', change_rotation)],
-        states={
-            WAITING_ROTATION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_rotation_value)
+            WAITING_SUB_USER_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, show_dashboard)
             ],
-            WAITING_ROTATION + 1: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, perform_rotation_change)
-            ]
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    # Country change conversation handler
+    rotation_conv = ConversationHandler(
+        entry_points=[CommandHandler("change_rotation", change_rotation_cmd)],
+        states={
+            WAITING_ROTATION_PACKAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, rotation_receive_package)
+            ],
+            WAITING_ROTATION_LIST: [
+                CallbackQueryHandler(handle_rotation_list_choice, pattern=r"^rotlist_")
+            ],
+            WAITING_ROTATION_VALUE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, perform_rotation_change)
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
     country_conv = ConversationHandler(
-        entry_points=[CommandHandler('change_country', change_country)],
+        entry_points=[CommandHandler("change_country", change_country_cmd)],
         states={
             CHOOSING_COUNTRY: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ask_country_choice),
-                CallbackQueryHandler(handle_country_selection)
-            ]
+                CallbackQueryHandler(
+                    handle_country_selection,
+                    pattern=r"^(country_|page_|cancel_country|current_page)",
+                ),
+            ],
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    # Add command handlers
+    # Basic commands
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("support", support))
     application.add_handler(CommandHandler("broadcast", broadcast))
-    
+
+    # Conversations
     application.add_handler(create_conv)
     application.add_handler(delete_conv)
     application.add_handler(dashboard_conv)
     application.add_handler(rotation_conv)
     application.add_handler(country_conv)
 
-    # Start bot with auto-restart capability
-    print("🤖 Proxy Manager Bot is starting...")
-    print(f"🔧 Admin ID: {ADMIN_ID}")
-    print("🌍 Country feature: Worldwide countries ENABLED")
-    print("🚀 Bot is ready and running!")
-    
-    while True:
-        try:
-            application.run_polling(drop_pending_updates=True)
-        except Exception as e:
-            logger.error(f"Bot crashed: {e}")
-            print(f"🔄 Restarting bot... Error: {e}")
-            continue
+    logger.info("🤖 Proxy Manager Bot is starting...")
+    logger.info(f"🔧 Admin ID: {ADMIN_ID}")
 
-if __name__ == '__main__':
+    application.run_polling(drop_pending_updates=True)
+
+
+if __name__ == "__main__":
     main()
