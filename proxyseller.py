@@ -11,8 +11,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration - Replace with your actual credentials
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
-API_KEY = "YOUR_PROXY_SELLER_API_KEY_HERE"
+BOT_TOKEN = "8268326998:AAG1Cu7Fv0VTMlQ6Xx8dJVRG20TJRN5Fa3Q"
+API_KEY = "de35ee3af144849b4b912b190f3f6f93"
 ADMIN_ID = 6577308099
 
 BASE_URL = "https://proxy-seller.com/personal/api/v1"
@@ -259,7 +259,7 @@ def main():
     if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
         print("❌ ERROR: Please set your BOT_TOKEN in the configuration")
         return
-    if API_KEY == "YOUR_PROXY_SELLER_API_KEY_HERE":
+    if API_KEY == "de35ee3af144849b4b912b190f3f6f93":
         print("❌ ERROR: Please set your API_KEY in the configuration")
         return
 
