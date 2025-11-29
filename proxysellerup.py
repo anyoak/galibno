@@ -1,6 +1,5 @@
 import logging
 import requests
-
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -574,7 +573,7 @@ class ProxyManager:
                 name1 = c1.get("country", "Unknown")[:18]
                 row.append(
                     InlineKeyboardButton(
-                        f"🌍 {name1}",
+                        f"{name1}",
                         callback_data=f"country_{c1['code']}_{c1['country']}",
                     )
                 )
@@ -583,7 +582,7 @@ class ProxyManager:
                 name2 = c2.get("country", "Unknown")[:18]
                 row.append(
                     InlineKeyboardButton(
-                        f"🌍 {name2}",
+                        f"{name2}",
                         callback_data=f"country_{c2['code']}_{c2['country']}",
                     )
                 )
