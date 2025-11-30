@@ -74,7 +74,7 @@ class MoonscapeStyle:
             f"│ {package_key}\n"
             "│\n"
             f"│ 🔌 Proxy Details:\n\n"
-            f"│ <code>{proxy_string}</code>\n"
+            f"│ {proxy_string} \n"
             "╰─────────────────────"
         )
         if additional_info:
