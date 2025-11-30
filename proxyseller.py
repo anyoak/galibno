@@ -18,7 +18,7 @@ from telegram.ext import (
 
 # ---------------- CONFIGURATION ----------------
 
-BOT_TOKEN = "8268326998:AAG1Cu7Fv0VTMlQ6Xx8dJVRG20TJRN5Fa3Q"          # ← এখানে তোমার বট টোকেন
+BOT_TOKEN = "8241000517:AAHK_5mwiriyRnLQ2j2K1beBmf07XRbbzzo"          # ← এখানে তোমার বট টোকেন
 API_KEY = "de35ee3af144849b4b912b190f3f6f93"         # ← এখানে Proxy-Seller API key
 ADMIN_ID = 6577308099                          # ← তোমার Telegram numeric user ID
 
