@@ -20,8 +20,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-API_TOKEN = "8490533685:AAHsZW-Do8ioSQHlU4SCDh3RlvMdBPpz2To"
-ADMIN_IDS = [6577308099, 5878787791]
+API_TOKEN = "8592321500:AAG8YNqaTWy4xaMdTvMYDe5zm0R5xtg0CVg"
+ADMIN_IDS = [6577308099, 7708926649]
 
 # Default channel values (used only as fallback / initial database values)
 DEFAULT_MAIN_CHANNEL = '@mailtwist'
