@@ -20,14 +20,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-API_TOKEN = "8592321500:AAG8YNqaTWy4xaMdTvMYDe5zm0R5xtg0CVg"
-ADMIN_IDS = [6577308099, 7708926649]
+API_TOKEN = "8490533685:AAFqWp8cLxzkLIzRdILWn8UQsngURibH29A"
+ADMIN_IDS = [6577308099, 5878787791]
 
 # Default channel values (used only as fallback / initial database values)
-DEFAULT_MAIN_CHANNEL = '@mailtwist'
-DEFAULT_BACKUP_CHANNEL = '-1002110340097'
-DEFAULT_BACKUP_CHANNEL_LINK = 'https://t.me/+FFG2MEKtQsxkMTQ9'
-DEFAULT_OTP_CHANNEL = '@OrangeTrack'
+DEFAULT_MAIN_CHANNEL = '@FutureTech30'
+DEFAULT_BACKUP_CHANNEL = '-1003223529033'
+DEFAULT_BACKUP_CHANNEL_LINK = 'https://t.me/FutureTechOtp'
+DEFAULT_OTP_CHANNEL = '@FutureTechOtp'
 
 if ':' not in API_TOKEN:
     raise ValueError('Invalid bot token format.')
@@ -481,7 +481,7 @@ def show_main_menu(chat_id, user_id):
         markup.add(admin_btn)
     
     bot.send_message(chat_id, 
-                    "🌍 Welcome to the Global Virtual Number Hub!\n\n"
+                    "🌍 Welcome to the FutureTech Bot!\n\n"
                     "✨ Choose a country to get a unique phone number for verification purposes.\n"
                     "🔐 All numbers are private and secure.\n\n"
                     "```Select a country from the options below:```",
